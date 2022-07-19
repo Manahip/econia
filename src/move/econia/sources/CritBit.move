@@ -36,15 +36,15 @@
 ///
 /// The present implementation involves a tree with two types of nodes,
 /// inner (`I`) and outer (`O`). Inner nodes have two children each
-/// (`I.l` and `I.r`), while outer nodes have no children. There are no
+/// (`I.left` and `I.right`), while outer nodes have no children. There are no
 /// nodes that have exactly one child. Outer nodes store a key-value
-/// pair with a 128-bit integer as a key (`O.k`), and an arbitrary value
-/// of generic type (`O.v`). Inner nodes do not store a key, but rather,
-/// an 8-bit integer (`I.c`) indicating the most-significant critical
+/// pair with a 128-bit integer as a key (`O.key`), and an arbitrary value
+/// of generic type (`O.value`). Inner nodes do not store a key, but rather,
+/// an 8-bit integer (`I.critical_pos`) indicating the most-significant critical
 /// bit (crit-bit) of divergence between keys located within the node's
 /// two subtrees: keys in the node's left subtree are unset at the
 /// critical bit, while keys in the node's right subtree are set at the
-/// critical bit. Both node types have a parent (`I.p`, `O.p`), which
+/// critical bit. Both node types have a parent (`I.parent`, `O.parent`), which
 /// may be flagged as `ROOT` if the the node is the root.
 ///
 /// Bit numbers are 0-indexed starting at the least-significant bit
@@ -79,12 +79,12 @@
 /// Both inner nodes (`I`) and outer nodes (`O`) are stored in vectors
 /// (`CB.i` and `CB.o`), and parent-child relationships between nodes
 /// are described in terms of vector indices: an outer node indicating
-/// `123` in its parent field (`O.p`), for instance, has as its parent
+/// `123` in its parent field (`O.parent`), for instance, has as its parent
 /// an inner node at vector index `123`. Notably, the vector index of an
 /// inner node is identical to the number indicated by its child's
-/// parent field (`I.p` or `O.p`), but the vector index of an outer node
+/// parent field (`I.parent` or `O.parent`), but the vector index of an outer node
 /// is **not** identical to the number indicated by its parent's child
-/// field (`I.l` or `I.r`), because the 63rd bit of a so-called "field
+/// field (`I.left` or `I.right`), because the 63rd bit of a so-called "field
 /// index" (the number stored in a struct field) is reserved for a node
 /// type bit flag, with outer nodes having bit 63 set and inner nodes
 /// having bit 63 unset. This schema enables discrimination between node
@@ -96,7 +96,7 @@
 /// Similarly, if a node, inner or outer, is located at the root, its
 /// "parent field index" will indicate `ROOT`, and will not correspond
 /// to the vector index of any inner node, since the root node does not
-/// have a parent. Likewise, the "root field" of the tree (`CB.r`) will
+/// have a parent. Likewise, the "root field" of the tree (`CB.right`) will
 /// contain the field index of the given node, set at bit 63 if the root
 /// is an outer node.
 ///
@@ -196,23 +196,23 @@
 /// To start, initialize a tree with {$n, 100n$}, for $0 < n < 10$:
 ///
 /// ```move
-/// let cb = empty(); // Initialize empty tree
+/// let tree = empty(); // Initialize empty tree
 /// // Insert {n, 100 * n} for 0 < n < 10, out of order
-/// insert(&mut cb, 9, 900);
-/// insert(&mut cb, 6, 600);
-/// insert(&mut cb, 3, 300);
-/// insert(&mut cb, 1, 100);
-/// insert(&mut cb, 8, 800);
-/// insert(&mut cb, 2, 200);
-/// insert(&mut cb, 7, 700);
-/// insert(&mut cb, 5, 500);
-/// insert(&mut cb, 4, 400);
+/// insert(&mut tree, 9, 900);
+/// insert(&mut tree, 6, 600);
+/// insert(&mut tree, 3, 300);
+/// insert(&mut tree, 1, 100);
+/// insert(&mut tree, 8, 800);
+/// insert(&mut tree, 2, 200);
+/// insert(&mut tree, 7, 700);
+/// insert(&mut tree, 5, 500);
+/// insert(&mut tree, 4, 400);
 /// ```
 ///
 /// Before starting traversal, first verify that the tree is not empty:
 ///
 /// ```move
-/// assert!(!is_empty(&cb), 0); // Assert tree not empty
+/// assert!(!is_empty(&tree), 0); // Assert tree not empty
 /// ```
 ///
 /// This check could be performed within the generalized initialization
@@ -229,7 +229,7 @@
 /// and a counter for the number of remaining traversals possible:
 ///
 /// ```move
-/// let n = length(&cb); // Get number of keys in the tree
+/// let n = length(&tree); // Get number of keys in the tree
 /// let r = n - 1; // Get number of remaining traversals possible
 /// ```
 ///
@@ -243,7 +243,7 @@
 /// // Initialize predecessor traversal: get max key in tree,
 /// // mutable reference to corresponding value, parent field of
 /// // corresponding node, and the child field index of it
-/// let (k, v_r, p_f, c_i) = traverse_p_init_mut(&mut cb);
+/// let (k, v_r, p_f, c_i) = traverse_p_init_mut(&mut tree);
 /// ```
 ///
 /// Now perform an inorder predecessor traversal, popping out the node
@@ -262,13 +262,13 @@
 /// >     if (k % 4 == 0) { // If key is a multiple of 4
 /// >         // Traverse pop corresponding node and discard its value
 /// >         (k, v_r, p_f, c_i, _) =
-/// >             traverse_p_pop_mut(&mut cb, k, p_f, c_i, n);
+/// >             traverse_p_pop_mut(&mut tree, k, p_f, c_i, n);
 /// >         n = n - 1; // Decrement key count
 /// >     } else { // If key is not a multiple of 4
 /// >         *v_r = *v_r + i; // Increment corresponding value
 /// >         i = i + 10; // Increment by 10 more next iteration
 /// >         // Traverse to predecessor
-/// >         (k, v_r, p_f, c_i) = traverse_p_mut(&mut cb, k, p_f);
+/// >         (k, v_r, p_f, c_i) = traverse_p_mut(&mut tree, k, p_f);
 /// >     };
 /// >     r = r - 1; // Decrement remaining traversal count
 /// > }; // Traversal has ended up at node having minimum key
@@ -280,15 +280,15 @@
 ///
 /// ```move
 /// // Assert keys popped correctly
-/// assert!(!has_key(&cb, 4) && !has_key(&cb, 8), 1);
+/// assert!(!has_key(&tree, 4) && !has_key(&tree, 8), 1);
 /// // Assert correct value updates
-/// assert!(*borrow(&cb, 1) ==   0, 2);
-/// assert!(*borrow(&cb, 2) == 260, 3);
-/// assert!(*borrow(&cb, 3) == 350, 4);
-/// assert!(*borrow(&cb, 5) == 540, 5);
-/// assert!(*borrow(&cb, 6) == 630, 6);
-/// assert!(*borrow(&cb, 7) == 720, 7);
-/// assert!(*borrow(&cb, 9) == 910, 8);
+/// assert!(*borrow(&tree, 1) ==   0, 2);
+/// assert!(*borrow(&tree, 2) == 260, 3);
+/// assert!(*borrow(&tree, 3) == 350, 4);
+/// assert!(*borrow(&tree, 5) == 540, 5);
+/// assert!(*borrow(&tree, 6) == 630, 6);
+/// assert!(*borrow(&tree, 7) == 720, 7);
+/// assert!(*borrow(&tree, 9) == 910, 8);
 /// ```
 ///
 /// Here, the only assurance that the traversal does not go past the end
@@ -315,7 +315,7 @@
 /// // Re-initialize remaining traversal, value increment counters
 /// (r, i) = (n - 1, 1);
 /// // Initialize successor traversal
-/// (k, v_r, p_f, c_i) = traverse_s_init_mut(&mut cb);
+/// (k, v_r, p_f, c_i) = traverse_s_init_mut(&mut tree);
 /// ```
 ///
 /// Here, if the key is equal to 7, then traverse pop the corresponding
@@ -326,12 +326,12 @@
 /// > while(r > 0) { // While remaining traversals possible
 /// >     if (k == 7) { // If key is 7
 /// >         // Traverse pop corresponding node and store its value
-/// >         (_, _, _, _, v) = traverse_s_pop_mut(&mut cb, k, p_f, c_i, n);
+/// >         (_, _, _, _, v) = traverse_s_pop_mut(&mut tree, k, p_f, c_i, n);
 /// >         break // Stop traversal
 /// >     } else { // For all keys not equal to 7
 /// >         *v_r = *v_r + i; // Increment corresponding value
 /// >         // Traverse to successor
-/// >         (k, v_r, p_f, c_i) = traverse_s_mut(&mut cb, k, p_f);
+/// >         (k, v_r, p_f, c_i) = traverse_s_mut(&mut tree, k, p_f);
 /// >         i = i + 1; // Increment by 1 more next iteration
 /// >     };
 /// >     r = r - 1; // Decrement remaining traversal count
@@ -342,16 +342,16 @@
 ///
 /// ```move
 /// // Assert key popped correctly
-/// assert!(!has_key(&cb, 7), 10);
+/// assert!(!has_key(&tree, 7), 10);
 /// // Assert value of popped node stored correctly
 /// assert!(v == 720, 11);
 /// // Assert values updated correctly
-/// assert!(*borrow(&cb, 1) ==   1, 12);
-/// assert!(*borrow(&cb, 2) == 262, 13);
-/// assert!(*borrow(&cb, 3) == 353, 14);
-/// assert!(*borrow(&cb, 5) == 544, 15);
-/// assert!(*borrow(&cb, 6) == 635, 16);
-/// assert!(*borrow(&cb, 9) == 910, 17);
+/// assert!(*borrow(&tree, 1) ==   1, 12);
+/// assert!(*borrow(&tree, 2) == 262, 13);
+/// assert!(*borrow(&tree, 3) == 353, 14);
+/// assert!(*borrow(&tree, 5) == 544, 15);
+/// assert!(*borrow(&tree, 6) == 635, 16);
+/// assert!(*borrow(&tree, 9) == 910, 17);
 /// ```
 ///
 /// ### Singleton traversal initialization
@@ -361,16 +361,16 @@
 ///
 /// ```move
 /// // Pop all key-value pairs except {9, 910}
-/// _ = pop(&mut cb, 1);
-/// _ = pop(&mut cb, 2);
-/// _ = pop(&mut cb, 3);
-/// _ = pop(&mut cb, 5);
-/// _ = pop(&mut cb, 6);
-/// assert!(!is_empty(&cb), 18); // Assert tree not empty
-/// let n = length(&cb); // Get number of keys in the tree
+/// _ = pop(&mut tree, 1);
+/// _ = pop(&mut tree, 2);
+/// _ = pop(&mut tree, 3);
+/// _ = pop(&mut tree, 5);
+/// _ = pop(&mut tree, 6);
+/// assert!(!is_empty(&tree), 18); // Assert tree not empty
+/// let n = length(&tree); // Get number of keys in the tree
 /// let r = n - 1; // Get number of remaining traversals possible
 /// // Initialize successor traversal
-/// (k, v_r, p_f, _) = traverse_s_init_mut(&mut cb);
+/// (k, v_r, p_f, _) = traverse_s_init_mut(&mut tree);
 /// ```
 ///
 /// In this case, the value of the corresponding node can still be
@@ -382,12 +382,12 @@
 /// > while(r > 0) { // While remaining traversals possible
 /// >     *v_r = 4321; // Update value of corresponding node
 /// >     // Traverse to successor
-/// >     (k, v_r, p_f, _) = traverse_s_mut(&mut cb, k, p_f);
+/// >     (k, v_r, p_f, _) = traverse_s_mut(&mut tree, k, p_f);
 /// >     r = r - 1; // Decrement remaining traversal count
 /// > }; // This loop does not go through any iterations
 /// > // Assert value unchanged via loop
-/// > assert!(pop(&mut cb, 9) == 1234, 19);
-/// > destroy_empty(cb); // Destroy empty tree
+/// > assert!(pop(&mut tree, 9) == 1234, 19);
+/// > destroy_empty(tree); // Destroy empty tree
 /// ```
 ///
 /// ### Ending traversal on a pop
@@ -400,36 +400,21 @@
 ///
 module Econia::CritBit {
 
-    use Std::Vector::{
-        borrow as v_b,
-        borrow_mut as v_b_m,
-        destroy_empty as v_d_e,
-        empty as v_e,
-        is_empty as v_i_e,
-        length as v_l,
-        pop_back as v_po_b,
-        push_back as v_pu_b,
-        swap_remove as v_s_r
-    };
-
-    #[test_only]
-    use Std::Vector::{
-        append as v_a,
-    };
+    use Std::Vector;
 
     /// A crit-bit tree for key-value pairs with value type `V`
-    struct CB<V> has store {
+    struct CribitTree<V> has store {
         /// Root node index. When bit 63 is set, root node is an outer
         /// node. Otherwise root is an inner node. 0 when tree is empty
-        r: u64,
+        root: u64,
         /// Inner nodes
-        i: vector<I>,
+        inner_nodes: vector<InnerNode>,
         /// Outer nodes
-        o: vector<O<V>>
+        outer_nodes: vector<OuterNode<V>>
     }
 
     /// Inner node
-    struct I has store {
+    struct InnerNode has store {
         // Documentation comments, specifically for struct fields,
         // apparently do not support fenced code blocks unless they are
         // preceded by a blank line...
@@ -439,31 +424,31 @@ module Econia::CritBit {
         /// >    11101...1010010101
         /// >     bit 5 = 0 -|    |- bit 0 = 1
         /// ```
-        c: u8,
+        critical_pos: u8,
         /// Parent node vector index. `ROOT` when node is root,
         /// otherwise corresponds to vector index of an inner node.
-        p: u64,
+        parent: u64,
         /// Left child node index. When bit 63 is set, left child is an
         /// outer node. Otherwise left child is an inner node.
-        l: u64,
+        left: u64,
         /// Right child node index. When bit 63 is set, right child is
         /// an outer node. Otherwise right child is an inner node.
-        r: u64
+        right: u64
     }
 
     /// Outer node with key `k` and value `v`
-    struct O<V> has store {
+    struct OuterNode<V> has store {
         /// Key, which would preferably be a generic type representing
         /// the union of {`u8`, `u64`, `u128`}. However this kind of
         /// union typing is not supported by Move, so the most general
         /// (and memory intensive) `u128` is instead specified strictly.
         /// Must be an integer for bitwise operations.
-        k: u128,
+        key: u128,
         /// Value from node's key-value pair
-        v: V,
+        value: V,
         /// Parent node vector index. `ROOT` when node is root,
         /// otherwise corresponds to vector index of an inner node.
-        p: u64,
+        parent: u64,
     }
 
     // Error codes >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -513,102 +498,102 @@ module Econia::CritBit {
     // Public functions >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
     /// Return immutable reference to value corresponding to key `k` in
-    /// `cb`, aborting if empty tree or no match
+    /// `tree`, aborting if empty tree or no match
     public fun borrow<V>(
-        cb: &CB<V>,
+        tree: &CribitTree<V>,
         k: u128,
     ): &V {
-        assert!(!is_empty<V>(cb), E_BORROW_EMPTY); // Abort if empty
-        let c_o = b_s_o<V>(cb, k); // Borrow search outer node
-        assert!(c_o.k == k, E_NOT_HAS_K); // Abort if key not in tree
-        &c_o.v // Return immutable reference to corresponding value
+        assert!(!is_empty<V>(tree), E_BORROW_EMPTY); // Abort if empty
+        let c_o = borrow_search_outer<V>(tree, k); // Borrow search outer node
+        assert!(c_o.key == k, E_NOT_HAS_K); // Abort if key not in tree
+        &c_o.value // Return immutable reference to corresponding value
     }
 
     /// Return mutable reference to value corresponding to key `k` in
     /// `cb`, aborting if empty tree or no match
     public fun borrow_mut<V>(
-        cb: &mut CB<V>,
+        tree: &mut CribitTree<V>,
         k: u128,
     ): &mut V {
-        assert!(!is_empty<V>(cb), E_BORROW_EMPTY); // Abort if empty
-        let c_o = b_s_o_m<V>(cb, k); // Borrow search outer node
-        assert!(c_o.k == k, E_NOT_HAS_K); // Abort if key not in tree
-        &mut c_o.v // Return mutable reference to corresponding value
+        assert!(!is_empty<V>(tree), E_BORROW_EMPTY); // Abort if empty
+        let c_o = borrow_search_outer_mut<V>(tree, k); // Borrow search outer node
+        assert!(c_o.key == k, E_NOT_HAS_K); // Abort if key not in tree
+        &mut c_o.value // Return mutable reference to corresponding value
     }
 
     /// Destroy empty tree `cb`
     public fun destroy_empty<V>(
-        cb: CB<V>
+        tree: CribitTree<V>
     ) {
-        assert!(is_empty(&cb), E_DESTROY_NOT_EMPTY);
-        let CB{r: _, i, o} = cb; // Unpack root index and node vectors
-        v_d_e(i); // Destroy empty inner node vector
-        v_d_e(o); // Destroy empty outer node vector
+        assert!(is_empty(&tree), E_DESTROY_NOT_EMPTY);
+        let CribitTree{ root: _, inner_nodes: i, outer_nodes: o } = tree; // Unpack root index and node vectors
+        Vector::destroy_empty(i); // Destroy empty inner node vector
+        Vector::destroy_empty(o); // Destroy empty outer node vector
     }
 
     /// Return an empty tree
     public fun empty<V>():
-    CB<V> {
-        CB{r: 0, i: v_e<I>(), o: v_e<O<V>>()}
+    CribitTree<V> {
+        CribitTree{ root: 0, inner_nodes: Vector::empty<InnerNode>(), outer_nodes: Vector::empty<OuterNode<V>>()}
     }
 
     /// Return true if `cb` has key `k`
     public fun has_key<V>(
-        cb: &CB<V>,
+        tree: &CribitTree<V>,
         k: u128,
     ): bool {
-        if (is_empty<V>(cb)) return false; // Return false if empty
+        if (is_empty<V>(tree)) return false; // Return false if empty
         // Return true if search outer node has same key
-        return b_s_o<V>(cb, k).k == k
+        return borrow_search_outer<V>(tree, k).key == k
     }
 
     /// Insert key `k` and value `v` into `cb`, aborting if `k` already
     /// in `cb`
     public fun insert<V>(
-        cb: &mut CB<V>,
+        tree: &mut CribitTree<V>,
         k: u128,
         v: V
     ) {
-        let l = length(cb); // Get length of tree
+        let l = length(tree); // Get length of tree
         check_len(l); // Verify insertion can take place
         // Insert via one of three cases, depending on the length
-        if (l == 0) insert_empty(cb, k , v) else
-        if (l == 1) insert_singleton(cb, k, v) else
-        insert_general(cb, k, v, l);
+        if (l == 0) insert_empty(tree, k , v) else
+        if (l == 1) insert_singleton(tree, k, v) else
+        insert_general(tree, k, v, l);
     }
 
     /// Return `true` if `cb` has no outer nodes
-    public fun is_empty<V>(cb: &CB<V>): bool {v_i_e<O<V>>(&cb.o)}
+    public fun is_empty<V>(tree: &CribitTree<V>): bool {Vector::is_empty<OuterNode<V>>(&tree.outer_nodes)}
 
     /// Return number of keys in `cb` (number of outer nodes)
-    public fun length<V>(cb: &CB<V>): u64 {v_l<O<V>>(&cb.o)}
+    public fun length<V>(tree: &CribitTree<V>): u64 {Vector::length<OuterNode<V>>(&tree.outer_nodes)}
 
     /// Return the maximum key in `cb`, aborting if `cb` is empty
     public fun max_key<V>(
-        cb: &CB<V>,
+        tree: &CribitTree<V>,
     ): u128 {
-        assert!(!is_empty(cb), E_LOOKUP_EMPTY); // Assert tree not empty
-        v_b<O<V>>(&cb.o, o_v(max_node_c_i<V>(cb))).k // Return max key
+        assert!(!is_empty(tree), E_LOOKUP_EMPTY); // Assert tree not empty
+        Vector::borrow<OuterNode<V>>(&tree.outer_nodes, outer_index(max_node_c_i<V>(tree))).key // Return max key
     }
 
     /// Return the minimum key in `cb`, aborting if `cb` is empty
     public fun min_key<V>(
-        cb: &CB<V>,
+        tree: &CribitTree<V>,
     ): u128 {
-        assert!(!is_empty(cb), E_LOOKUP_EMPTY); // Assert tree not empty
-        v_b<O<V>>(&cb.o, o_v(min_node_c_i<V>(cb))).k // Return min key
+        assert!(!is_empty(tree), E_LOOKUP_EMPTY); // Assert tree not empty
+        Vector::borrow<OuterNode<V>>(&tree.outer_nodes, outer_index(min_node_c_i<V>(tree))).key // Return min key
     }
 
     /// Pop from `cb` value corresponding to key `k`, aborting if `cb`
     /// is empty or does not contain `k`
     public fun pop<V>(
-        cb: &mut CB<V>,
+        tree: &mut CribitTree<V>,
         k: u128
     ): V {
-        assert!(!is_empty(cb), E_POP_EMPTY); // Assert tree not empty
-        let l = length(cb); // Get number of outer nodes in tree
+        assert!(!is_empty(tree), E_POP_EMPTY); // Assert tree not empty
+        let l = length(tree); // Get number of outer nodes in tree
         // Depending on length, pop from singleton or for general case
-        if (l == 1) pop_singleton(cb, k) else pop_general(cb, k, l)
+        if (l == 1) pop_singleton(tree, k) else pop_general(tree, k, l)
     }
 
     /// Return a tree with one node having key `k` and value `v`
@@ -616,10 +601,10 @@ module Econia::CritBit {
         k: u128,
         v: V
     ):
-    CB<V> {
-        let cb = CB{r: 0, i: v_e<I>(), o: v_e<O<V>>()};
-        insert_empty<V>(&mut cb, k, v);
-        cb
+    CribitTree<V> {
+        let tree = CribitTree{ root: 0, inner_nodes: Vector::empty<InnerNode>(), outer_nodes: Vector::empty<OuterNode<V>>()};
+        insert_empty<V>(&mut tree, k, v);
+        tree
     }
 
     /// Initialize a mutable iterated inorder traversal in a tree having
@@ -640,7 +625,7 @@ module Econia::CritBit {
     /// * Exposes node indices
     /// * Assumes caller has already verified tree is not empty
     public fun traverse_init_mut<V>(
-        cb: &mut CB<V>,
+        tree: &mut CribitTree<V>,
         d: bool,
     ): (
         u128,
@@ -650,12 +635,12 @@ module Econia::CritBit {
     ) {
         // If predecessor traversal, get child field index of node
         // having maximum key, else node having minimum key
-        let i_n = if (d == L) max_node_c_i(cb) else min_node_c_i(cb);
+        let i_n = if (d == L) max_node_c_i(tree) else min_node_c_i(tree);
         // Borrow mutable reference to node
-        let n = v_b_m<O<V>>(&mut cb.o, o_v(i_n));
+        let n = Vector::borrow_mut<OuterNode<V>>(&mut tree.outer_nodes, outer_index(i_n));
         // Return node's key, mutable reference to its value, its parent
         // field, and the child field index of it
-        (n.k, &mut n.v, n.p, i_n)
+        (n.key, &mut n.value, n.parent, i_n)
     }
 
     /// Wrapped `traverse_c_i()` call for enumerated return extraction.
@@ -666,7 +651,7 @@ module Econia::CritBit {
     /// * `u64`: Target node's parent field
     /// * `u64`: Child field index of target node
     public fun traverse_mut<V>(
-        cb: &mut CB<V>,
+        tree: &mut CribitTree<V>,
         k: u128,
         p_f: u64,
         d: bool
@@ -677,12 +662,12 @@ module Econia::CritBit {
         u64
     ) {
         // Get child field index of target node
-        let i_t = traverse_c_i<V>(cb, k, p_f, d);
+        let i_t = traverse_c_i<V>(tree, k, p_f, d);
         // Borrow mutable reference to target node
-        let t = v_b_m<O<V>>(&mut cb.o, o_v(i_t));
+        let t = Vector::borrow_mut<OuterNode<V>>(&mut tree.outer_nodes, outer_index(i_t));
         // Return target node's key, mutable reference to its value, its
         // parent field, and child field index of it
-        (t.k, &mut t.v, t.p, i_t)
+        (t.key, &mut t.value, t.parent, i_t)
     }
 
     /// Traverse in the specified direction from the node containing the
@@ -720,7 +705,7 @@ module Econia::CritBit {
     ///   accepts this number as a parameter (`n_o`), which should be
     ///   tracked by the caller
     public fun traverse_pop_mut<V>(
-        cb: &mut CB<V>,
+        tree: &mut CribitTree<V>,
         k: u128,
         p_f: u64,
         c_i: u64,
@@ -735,23 +720,23 @@ module Econia::CritBit {
     ) {
         // Mark start node's side as a child as left (true) if node's
         // parent has the node as its left child, else right (false)
-        let s_s = v_b<I>(&cb.i, p_f).l == c_i;
+        let s_s = Vector::borrow<InnerNode>(&tree.inner_nodes, p_f).left == c_i;
         // Store target node's pre-pop child field index
-        let i_t = traverse_c_i(cb, k, p_f, d);
+        let i_t = traverse_c_i(tree, k, p_f, d);
         // Update relationships for popped start node
-        pop_update_relationships(cb, s_s, p_f);
+        pop_update_relationships(tree, s_s, p_f);
         // Store start node value from pop-facilitated node destruction
-        let s_v = pop_destroy_nodes(cb, p_f, c_i, n_o);
+        let s_v = pop_destroy_nodes(tree, p_f, c_i, n_o);
         // If target node was last in outer node vector, then swap
         // remove will have relocated it, so update its post-pop field
         // index to the start node's pre-pop field index
-        if (o_v(i_t) == n_o - 1) i_t = c_i;
+        if (outer_index(i_t) == n_o - 1) i_t = c_i;
         // Borrow mutable reference to target node
-        let t = v_b_m<O<V>>(&mut cb.o, o_v(i_t));
+        let t = Vector::borrow_mut<OuterNode<V>>(&mut tree.outer_nodes, outer_index(i_t));
         // Return target node's key, mutable reference to its value, its
         // parent field, the child field index of it, and the start
         // node's popped value
-        (t.k, &mut t.v, t.p, i_t, s_v)
+        (t.key, &mut t.value, t.parent, i_t, s_v)
     }
 
     /// Terminate iterated traversal by popping the outer node for the
@@ -774,24 +759,24 @@ module Econia::CritBit {
     ///   accepts this number as a parameter (`n_o`), which should be
     ///   tracked by the caller and should be nonzero
     public fun traverse_end_pop<V>(
-        cb: &mut CB<V>,
+        tree: &mut CribitTree<V>,
         p_f: u64,
         c_i: u64,
         n_o: u64,
     ): V {
         if (n_o == 1) { // If popping only remaining node in tree
-            cb.r = 0; // Update root
+            tree.root = 0; // Update root
             // Pop off and unpack outer node at root
-            let O{k: _, v, p: _} = v_po_b<O<V>>(&mut cb.o);
+            let OuterNode{ key: _, value: v, parent: _} = Vector::pop_back<OuterNode<V>>(&mut tree.outer_nodes);
             v // Return popped value
         } else { // If popping from tree with more than 1 outer node
             // Mark node's side as a child as left (true) if node's
             // parent has the node as its left child, else right (false)
-            let n_s_c = v_b<I>(&cb.i, p_f).l == c_i;
+            let n_s_c = Vector::borrow<InnerNode>(&tree.inner_nodes, p_f).left == c_i;
             // Update sibling, parent, grandparent relationships
-            pop_update_relationships(cb, n_s_c, p_f);
+            pop_update_relationships(tree, n_s_c, p_f);
             // Destroy old nodes, returning popped value
-            pop_destroy_nodes(cb, p_f, c_i, n_o)
+            pop_destroy_nodes(tree, p_f, c_i, n_o)
         }
     }
 
@@ -799,20 +784,20 @@ module Econia::CritBit {
     /// Wrapped `traverse_init_mut()` call for predecessor traversal.
     /// See [traversal walkthrough](#Walkthrough)
     public fun traverse_p_init_mut<V>(
-        cb: &mut CB<V>,
+        tree: &mut CribitTree<V>,
     ): (
         u128,
         &mut V,
         u64,
         u64
     ) {
-        traverse_init_mut(cb, L)
+        traverse_init_mut(tree, L)
     }
 
     /// Wrapped `traverse_mut()` call for predecessor traversal. See
     /// [traversal walkthrough](#Walkthrough)
     public fun traverse_p_mut<V>(
-        cb: &mut CB<V>,
+        tree: &mut CribitTree<V>,
         k: u128,
         p_f: u64
     ): (
@@ -821,13 +806,13 @@ module Econia::CritBit {
         u64,
         u64
     ) {
-        traverse_mut<V>(cb, k, p_f, L)
+        traverse_mut<V>(tree, k, p_f, L)
     }
 
     /// Wrapped `traverse_pop_mut()` call for predecessor traversal. See
     /// [traversal walkthrough](#Walkthrough)
     public fun traverse_p_pop_mut<V>(
-        cb: &mut CB<V>,
+        tree: &mut CribitTree<V>,
         k: u128,
         p_f: u64,
         c_i: u64,
@@ -839,26 +824,26 @@ module Econia::CritBit {
         u64,
         V
     ) {
-        traverse_pop_mut(cb, k, p_f, c_i, n_o, L)
+        traverse_pop_mut(tree, k, p_f, c_i, n_o, L)
     }
 
     /// Wrapped `traverse_init_mut()` call for successor traversal.
     /// See [traversal walkthrough](#Walkthrough)
     public fun traverse_s_init_mut<V>(
-        cb: &mut CB<V>,
+        tree: &mut CribitTree<V>,
     ): (
         u128,
         &mut V,
         u64,
         u64
     ) {
-        traverse_init_mut(cb, R)
+        traverse_init_mut(tree, R)
     }
 
     /// Wrapped `traverse_mut()` call for successor traversal. See
     /// [traversal walkthrough](#Walkthrough)
     public fun traverse_s_mut<V>(
-        cb: &mut CB<V>,
+        tree: &mut CribitTree<V>,
         k: u128,
         p_f: u64
     ): (
@@ -867,13 +852,13 @@ module Econia::CritBit {
         u64,
         u64
     ) {
-        traverse_mut<V>(cb, k, p_f, R)
+        traverse_mut<V>(tree, k, p_f, R)
     }
 
     /// Wrapped `traverse_pop_mut()` call for successor traversal. See
     /// [traversal walkthrough](#Walkthrough)
     public fun traverse_s_pop_mut<V>(
-        cb: &mut CB<V>,
+        tree: &mut CribitTree<V>,
         k: u128,
         p_f: u64,
         c_i: u64,
@@ -885,7 +870,7 @@ module Econia::CritBit {
         u64,
         V
     ) {
-        traverse_pop_mut(cb, k, p_f, c_i, n_o, R)
+        traverse_pop_mut(tree, k, p_f, c_i, n_o, R)
     }
 
     // Public functions <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
@@ -897,38 +882,38 @@ module Econia::CritBit {
     /// `k` is unset or set, respectively, at the given critical bit.
     /// Then return mutable reference to search outer node (`b_c_o`
     /// indicates borrow search outer)
-    fun b_s_o<V>(
-        cb: &CB<V>,
-        k: u128,
-    ): &O<V> {
+    fun borrow_search_outer<V>(
+        tree: &CribitTree<V>,
+        key: u128,
+    ): &OuterNode<V> {
         // If root is an outer node, return reference to it
-        if (is_out(cb.r)) return (v_b<O<V>>(&cb.o, o_v(cb.r)));
+        if (is_out(tree.root)) return (Vector::borrow<OuterNode<V>>(&tree.outer_nodes, outer_index(tree.root)));
         // Otherwise borrow inner node at root
-        let n = v_b<I>(&cb.i, cb.r);
+        let n = Vector::borrow<InnerNode>(&tree.inner_nodes, tree.root);
         loop { // Loop over inner nodes
             // If key is set at critical bit, get index of child on R
-            let i_c = if (is_set(k, n.c)) n.r else n.l; // Otherwise L
+            let i_c = if (is_set(key, n.critical_pos)) n.right else n.left; // Otherwise L
             // If child is outer node, return reference to it
-            if (is_out(i_c)) return v_b<O<V>>(&cb.o, o_v(i_c));
-            n = v_b<I>(&cb.i, i_c); // Borrow next inner node to review
+            if (is_out(i_c)) return Vector::borrow<OuterNode<V>>(&tree.outer_nodes, outer_index(i_c));
+            n = Vector::borrow<InnerNode>(&tree.inner_nodes, i_c); // Borrow next inner node to review
         }
     }
 
     /// Like `b_s_o()`, but for mutable reference
-    fun b_s_o_m<V>(
-        cb: &mut CB<V>,
+    fun borrow_search_outer_mut<V>(
+        tree: &mut CribitTree<V>,
         k: u128,
-    ): &mut O<V> {
+    ): &mut OuterNode<V> {
         // If root is an outer node, return mutable reference to it
-        if (is_out(cb.r)) return (v_b_m<O<V>>(&mut cb.o, o_v(cb.r)));
+        if (is_out(tree.root)) return (Vector::borrow_mut<OuterNode<V>>(&mut tree.outer_nodes, outer_index(tree.root)));
         // Otherwise borrow inner node at root
-        let n = v_b<I>(&cb.i, cb.r);
+        let n = Vector::borrow<InnerNode>(&tree.inner_nodes, tree.root);
         loop { // Loop over inner nodes
             // If key is set at critical bit, get index of child on R
-            let i_c = if (is_set(k, n.c)) n.r else n.l; // Otherwise L
+            let i_c = if (is_set(k, n.critical_pos)) n.right else n.left; // Otherwise L
             // If child is outer node, return mutable reference to it
-            if (is_out(i_c)) return v_b_m<O<V>>(&mut cb.o, o_v(i_c));
-            n = v_b<I>(&cb.i, i_c); // Borrow next inner node to review
+            if (is_out(i_c)) return Vector::borrow_mut<OuterNode<V>>(&mut tree.outer_nodes, outer_index(i_c));
+            n = Vector::borrow<InnerNode>(&tree.inner_nodes, i_c); // Borrow next inner node to review
         }
     }
 
@@ -1028,9 +1013,9 @@ module Econia::CritBit {
     /// `s = r >> m` is calculated and updates are applied according to
     /// three potential outcomes:
     ///
-    /// * `s == 1` means that the critical bit `c` is equal to `m`
-    /// * `s == 0` means that `c < m`, so `u` is set to `m - 1`
-    /// * `s > 1` means that `c > m`, so `l` us set to `m + 1`
+    /// * `s == 1` means that the critical bit `critical_pos` is equal to `m`
+    /// * `s == 0` means that `critical_pos < m`, so `u` is set to `m - 1`
+    /// * `s > 1` means that `critical_pos > m`, so `l` us set to `m + 1`
     ///
     /// Hence, continuing the current example:
     /// ```
@@ -1060,7 +1045,7 @@ module Econia::CritBit {
     /// >       u = 7 -|- l = 7
     /// > s = x >> m: 00000001
     /// ```
-    /// Here, `s == 1`, which means that `c = m = 7`. Notably this
+    /// Here, `s == 1`, which means that `critical_pos = m = 7`. Notably this
     /// search has converged after only 3 iterations, as opposed to 7
     /// for the linear search proposed above, and in general such a
     /// search converges after $log_2(k)$ iterations at most, where $k$
@@ -1068,8 +1053,8 @@ module Econia::CritBit {
     /// comparison. Hence this search method improves the $O(k)$ search
     /// proposed by [Langley 2012](#References) to $O(log_2(k))$, and
     /// moreover, determines the actual number of the critical bit,
-    /// rather than just a bitmask with bit `c` set, as he proposes,
-    /// which can also be easily generated via `1 << c`.
+    /// rather than just a bitmask with bit `critical_pos` set, as he proposes,
+    /// which can also be easily generated via `1 << critical_pos`.
     fun crit_bit(
         s1: u128,
         s2: u128,
@@ -1080,7 +1065,7 @@ module Econia::CritBit {
         loop { // Begin binary search
             let m = (l + u) / 2; // Calculate midpoint of search window
             let s = x >> m; // Calculate midpoint shift of XOR result
-            if (s == 1) return m; // If shift equals 1, c = m
+            if (s == 1) return m; // If shift equals 1, critical_pos = m
             if (s > 1) l = m + 1 else u = m - 1; // Update search bounds
         }
     }
@@ -1091,35 +1076,35 @@ module Econia::CritBit {
     /// * `k` : Key to insert
     /// * `v` : Value to insert
     /// * `n_o` : Number of keys (outer nodes) in `cb` pre-insert
-    /// * `i_n_i` : Number of inner nodes in `cb` pre-insert (index of
+    /// * `idx_inner_node` : Number of inner nodes in `cb` pre-insert (index of
     ///   new inner node)
-    /// * `i_s_p`: Index of search parent
-    /// * `c`: Critical bit between insertion key and search outer node
+    /// * `idx_search_parent`: Index of search parent
+    /// * `critical_pos`: Critical bit between insertion key and search outer node
     fun insert_above<V>(
-        cb: &mut CB<V>,
+        tree: &mut CribitTree<V>,
         k: u128,
         v: V,
         n_o: u64,
-        i_n_i: u64,
-        i_s_p: u64,
-        c: u8
+        idx_inner_node: u64,
+        idx_search_parent: u64,
+        critical_pos: u8
     ) {
         // Set index of node under review to search parent's parent
-        let i_n_r = v_b<I>(&cb.i, i_s_p).p;
+        let i_n_r = Vector::borrow<InnerNode>(&tree.inner_nodes, idx_search_parent).parent;
         loop { // Loop over inner nodes
             if (i_n_r == ROOT) { // If walk arrives at root
                 // Insert above root
-                return insert_above_root(cb, k, v, n_o, i_n_i, c)
+                return insert_above_root(tree, k, v, n_o, idx_inner_node, critical_pos)
             } else { // If walk has not arrived at root
                 // Borrow mutable reference to node under review
-                let n_r = v_b_m<I>(&mut cb.i, i_n_r);
+                let n_r = Vector::borrow_mut<InnerNode>(&mut tree.inner_nodes, i_n_r);
                 // If critical bit between insertion key and search
                 // outer node is less than that of node under review
-                if (c < n_r.c) { // If need to insert below
+                if (critical_pos < n_r.critical_pos) { // If need to insert below
                     // Insert below node under review
-                    return insert_below_walk(cb, k, v, n_o, i_n_i, i_n_r, c)
+                    return insert_below_walk(tree, k, v, n_o, idx_inner_node, i_n_r, critical_pos)
                 } else { // If need to insert above
-                    i_n_r = n_r.p; // Review node under review's parent
+                    i_n_r = n_r.parent; // Review node under review's parent
                 }
             }
         }
@@ -1131,29 +1116,29 @@ module Econia::CritBit {
     /// * `k` : Key to insert
     /// * `v` : Value to insert
     /// * `n_o` : Number of keys (outer nodes) in `cb` pre-insert
-    /// * `i_n_i` : Number of inner nodes in `cb` pre-insert (index of
+    /// * `idx_inner_node` : Number of inner nodes in `cb` pre-insert (index of
     ///   new inner node)
-    /// * `c`: Critical bit between insertion key and search outer node
+    /// * `critical_pos`: Critical bit between insertion key and search outer node
     fun insert_above_root<V>(
-        cb: &mut CB<V>,
+        tree: &mut CribitTree<V>,
         k: u128,
         v: V,
         n_o: u64,
-        i_n_i: u64,
-        c: u8
+        idx_inner_node: u64,
+        critical_pos: u8
     ) {
-        let i_o_r = cb.r; // Get index of old root to insert above
+        let i_o_r = tree.root; // Get index of old root to insert above
         // Set old root node to have new inner node as parent
-        v_b_m<I>(&mut cb.i, i_o_r).p = i_n_i;
+        Vector::borrow_mut<InnerNode>(&mut tree.inner_nodes, i_o_r).parent = idx_inner_node;
         // Set root field index to indicate new inner node
-        cb.r = i_n_i;
+        tree.root = idx_inner_node;
         // Push back new inner and outer nodes, with inner node
         // indicating that it is root. If insertion key is set at
         // critical bit, new inner node should have as its left child
         // the previous root node and should have as its right child
         // the new outer node
         push_back_insert_nodes(
-            cb, k, v, i_n_i, c, ROOT, is_set(k, c), i_o_r, o_c(n_o)
+            tree, k, v, idx_inner_node, critical_pos, ROOT, is_set(k, critical_pos), i_o_r, o_c(n_o)
         );
     }
 
@@ -1163,39 +1148,39 @@ module Econia::CritBit {
     /// * `k` : Key to insert
     /// * `v` : Value to insert
     /// * `n_o` : Number of keys (outer nodes) in `cb` pre-insert
-    /// * `i_n_i` : Number of inner nodes in `cb` pre-insert (index of
+    /// * `idx_inner_node` : Number of inner nodes in `cb` pre-insert (index of
     ///   new inner node)
     /// * `i_s_o`: Field index of search outer node (with bit flag)
     /// * `s_s_o`: Side on which search outer node is child
     /// * `k_s_o`: Key of search outer node
-    /// * `i_s_p`: Index of search parent
-    /// * `c`: Critical bit between insertion key and search outer node
+    /// * `idx_search_parent`: Index of search parent
+    /// * `critical_pos`: Critical bit between insertion key and search outer node
     fun insert_below<V>(
-        cb: &mut CB<V>,
+        tree: &mut CribitTree<V>,
         k: u128,
         v: V,
-        n_o: u64,
-        i_n_i: u64,
+        num_outer: u64,
+        idx_inner_node: u64,
         i_s_o: u64,
         s_s_o: bool,
         k_s_o: u128,
-        i_s_p: u64,
-        c: u8
+        idx_search_parent: u64,
+        critical_pos: u8
     ) {
         // Borrow mutable reference to search parent
-        let s_p = v_b_m<I>(&mut cb.i, i_s_p);
+        let s_p = Vector::borrow_mut<InnerNode>(&mut tree.inner_nodes, idx_search_parent);
         // Update search parent to have new inner node as child, on same
         // side that the search outer node was a child at
-        if (s_s_o == L) s_p.l = i_n_i else s_p.r = i_n_i;
+        if (s_s_o == L) s_p.left = idx_inner_node else s_p.right = idx_inner_node;
         // Set search outer node to have new inner node as parent
-        v_b_m<O<V>>(&mut cb.o, o_v(i_s_o)).p = i_n_i;
+        Vector::borrow_mut<OuterNode<V>>(&mut tree.outer_nodes, outer_index(i_s_o)).parent = idx_inner_node;
         // Push back new inner and outer nodes, with inner node having
         // as its parent the search parent. If insertion key is less
         // than key of search outer node, new inner node should have as
         // its left child the new outer node and should have as its
         // right child the search outer node
         push_back_insert_nodes(
-            cb, k, v, i_n_i, c, i_s_p, k < k_s_o, o_c(n_o), i_s_o
+            tree, k, v, idx_inner_node, critical_pos, idx_search_parent, k < k_s_o, o_c(num_outer), i_s_o
         );
     }
 
@@ -1205,50 +1190,50 @@ module Econia::CritBit {
     /// * `k` : Key to insert
     /// * `v` : Value to insert
     /// * `n_o` : Number of keys (outer nodes) in `cb` pre-insert
-    /// * `i_n_i` : Number of inner nodes in `cb` pre-insert (index of
+    /// * `idx_inner_node` : Number of inner nodes in `cb` pre-insert (index of
     ///   new inner node)
     /// * `i_n_r` : Index of node under review from walk
-    /// * `c`: Critical bit between insertion key and search outer node
+    /// * `critical_pos`: Critical bit between insertion key and search outer node
     fun insert_below_walk<V>(
-        cb: &mut CB<V>,
+        tree: &mut CribitTree<V>,
         k: u128,
         v: V,
         n_o: u64,
-        i_n_i: u64,
+        idx_inner_node: u64,
         i_n_r: u64,
-        c: u8
+        critical_pos: u8
     ) {
         // Borrow mutable reference to node under review
-        let n_r = v_b_m<I>(&mut cb.i, i_n_r);
+        let n_r = Vector::borrow_mut<InnerNode>(&mut tree.inner_nodes, i_n_r);
         // If insertion key is set at critical bit indicated by node
         // under review, mark side and index of walked child as its
         // right child, else left
-        let (s_w_c, i_w_c) = if (is_set(k, n_r.c)) (R, n_r.r) else (L, n_r.l);
+        let (s_w_c, i_w_c) = if (is_set(k, n_r.critical_pos)) (R, n_r.right) else (L, n_r.left);
         // Set node under review to have as child new inner node on same
         // side as walked child
-        if (s_w_c == L) n_r.l = i_n_i else n_r.r = i_n_i;
+        if (s_w_c == L) n_r.left = idx_inner_node else n_r.right = idx_inner_node;
         // Update walked child to have new inner node as its parent
-        v_b_m<I>(&mut cb.i, i_w_c).p = i_n_i;
+        Vector::borrow_mut<InnerNode>(&mut tree.inner_nodes, i_w_c).parent = idx_inner_node;
         // Push back new inner and outer nodes, with inner node having
         // as its parent the node under review. If insertion key is set
         // at critical bit, new inner node should have as its left child
         // the walked child of the node under review and should have as
         // its right child the new outer node
         push_back_insert_nodes(
-            cb, k, v, i_n_i, c, i_n_r, is_set(k, c), i_w_c, o_c(n_o)
+            tree, k, v, idx_inner_node, critical_pos, i_n_r, is_set(k, critical_pos), i_w_c, o_c(n_o)
         );
     }
 
     /// Insert key-value pair `k` and `v` into an empty `cb`
     fun insert_empty<V>(
-        cb: &mut CB<V>,
+        tree: &mut CribitTree<V>,
         k: u128,
         v: V
     ) {
         // Push back outer node onto tree's vector of outer nodes
-        v_pu_b<O<V>>(&mut cb.o, O<V>{k, v, p: ROOT});
+        Vector::push_back<OuterNode<V>>(&mut tree.outer_nodes, OuterNode<V>{ key: k, value: v, parent: ROOT});
         // Set root index field to indicate 0th outer node
-        cb.r = OUT << N_TYPE;
+        tree.root = OUT << N_TYPE;
     }
 
     /// Insert key `k` and value `v` into tree `cb` already having `n_o`
@@ -1325,73 +1310,73 @@ module Econia::CritBit {
     /// >                          110   111 <- search outer node
     /// ```
     fun insert_general<V>(
-        cb: &mut CB<V>,
+        tree: &mut CribitTree<V>,
         k: u128,
         v: V,
-        n_o: u64
+        num_outer: u64
     ) {
         // Get number of inner nodes in tree (index of new inner node)
-        let i_n_i = v_l<I>(&cb.i);
+        let idx_inner_node = Vector::length<InnerNode>(&tree.inner_nodes);
         // Get field index of search outer node, its side as a child,
         // its key, the vector index of its parent, and the critical
         // bit indicated by the search parent
-        let (i_s_o, s_s_o, k_s_o, i_s_p, s_p_c) = search_outer(cb, k);
+        let (i_s_o, side, k_s_o, idx_search_parent, s_p_c) = search_outer(tree, k);
         assert!(k_s_o != k, E_HAS_K); // Assert key not a duplicate
         // Get critical bit between insertion key and search outer node
-        let c = crit_bit(k_s_o, k);
+        let critical_pos = crit_bit(k_s_o, k);
         // If critical bit is less than that indicated by search parent
-        if (c < s_p_c) {
+        if (critical_pos < s_p_c) {
             // Insert new inner node below search parent
-            insert_below(cb, k, v, n_o, i_n_i, i_s_o, s_s_o, k_s_o, i_s_p, c);
+            insert_below(tree, k, v, num_outer, idx_inner_node, i_s_o, side, k_s_o, idx_search_parent, critical_pos);
         } else { // If need to insert new inner node above search parent
-            insert_above(cb, k, v, n_o, i_n_i, i_s_p, c);
+            insert_above(tree, k, v, num_outer, idx_inner_node, idx_search_parent, critical_pos);
         }
     }
 
     /// Insert key `k` and value `v` into singleton tree `cb`, aborting
     /// if `k` already in `cb`
     fun insert_singleton<V>(
-        cb: &mut CB<V>,
+        tree: &mut CribitTree<V>,
         k: u128,
         v: V
     ) {
-        let n = v_b<O<V>>(&cb.o, 0); // Borrow existing outer node
-        assert!(k != n.k, E_HAS_K); // Assert insertion key not in tree
-        let c = crit_bit(n.k, k); // Get critical bit between two keys
+        let n = Vector::borrow<OuterNode<V>>(&tree.outer_nodes, 0); // Borrow existing outer node
+        assert!(k != n.key, E_HAS_K); // Assert insertion key not in tree
+        let critical_pos = crit_bit(n.key, k); // Get critical bit between two keys
         // Push back new inner and outer nodes, with inner node
         // indicating that it is root. If insertion key is greater than
         // singleton key, new inner node should have as its left child
         // existing outer node and should have as its right child new
         // outer node
-        push_back_insert_nodes(cb, k, v, 0, c, ROOT, k > n.k, o_c(0), o_c(1));
-        cb.r = 0; // Update tree root field to indicate new inner node
+        push_back_insert_nodes(tree, k, v, 0, critical_pos, ROOT, k > n.key, o_c(0), o_c(1));
+        tree.root = 0; // Update tree root field to indicate new inner node
         // Update existing outer node to have new inner node as parent
-        v_b_m<O<V>>(&mut cb.o, 0).p = 0;
+        Vector::borrow_mut<OuterNode<V>>(&mut tree.outer_nodes, 0).parent = 0;
     }
 
     /// Return the child field index of the outer node containing the
     /// maximum key in non-empty tree `cb`
     fun max_node_c_i<V>(
-        cb: &CB<V>
+        tree: &CribitTree<V>
     ): u64 {
-        let i_n = cb.r; // Initialize index of search node to root
+        let i_n = tree.root; // Initialize index of search node to root
         loop { // Loop over nodes
             // If search node is an outer node return its field index
             if (is_out(i_n)) return i_n;
-            i_n = v_b<I>(&cb.i, i_n).r // Review node's right child next
+            i_n = Vector::borrow<InnerNode>(&tree.inner_nodes, i_n).right // Review node's right child next
         }
     }
 
     /// Return the child field index of the outer node containing the
     /// minimum key in non-empty tree `cb`
     fun min_node_c_i<V>(
-        cb: &CB<V>
+        tree: &CribitTree<V>
     ): u64 {
-        let i_n = cb.r; // Initialize index of search node to root
+        let i_n = tree.root; // Initialize index of search node to root
         loop { // Loop over nodes
             // If search node is an outer node return its field index
             if (is_out(i_n)) return i_n;
-            i_n = v_b<I>(&cb.i, i_n).l // Review node's left child next
+            i_n = Vector::borrow<InnerNode>(&tree.inner_nodes, i_n).left // Review node's left child next
         }
     }
 
@@ -1405,31 +1390,32 @@ module Econia::CritBit {
     /// node index, by OR with a bitmask that has only flag bit set
     fun o_c(v: u64): u64 {v | OUT << N_TYPE}
 
-    /// Convert flagged child node index `c` to unflagged outer node
+    /// Convert flagged child node index `critical_pos` to unflagged outer node
     /// vector index, by AND with a bitmask that has only flag bit unset
-    fun o_v(c: u64): u64 {c & HI_64 ^ OUT << N_TYPE}
+    fun outer_index(critical_pos: u64): u64 {critical_pos & HI_64 ^ OUT << N_TYPE}
 
     /// Remove from `cb` inner node at child field index `i_i`, and
     /// outer node at child field index `i_o` (from node vector with
     /// `n_o` outer nodes pre-pop). Then return the popped value from
     /// the outer node
     fun pop_destroy_nodes<V>(
-        cb: &mut CB<V>,
+        tree: &mut CribitTree<V>,
         i_i: u64,
         i_o: u64,
         n_o: u64
     ): V {
-        let n_i = v_l<I>(&cb.i); // Get number of inner nodes pre-pop
+        let n_i = Vector::length<InnerNode>(&tree.inner_nodes); // Get number of inner nodes pre-pop
         // Swap remove parent of popped outer node, storing no fields
-        let I{c: _, p: _, l: _, r: _} = v_s_r<I>(&mut cb.i, i_i);
+        let InnerNode{ critical_pos: _, parent: _, left: _, right: _} = Vector::swap_remove<InnerNode>(&mut tree
+                                                                                                         .inner_nodes, i_i);
         // If destroyed inner node was not last inner node in vector,
         // repair the parent-child relationship broken by swap remove
-        if (i_i < n_i - 1) stitch_swap_remove(cb, i_i, n_i);
+        if (i_i < n_i - 1) stitch_swap_remove(tree, i_i, n_i);
         // Swap remove popped outer node, storing only its value
-        let O{k: _, v, p: _} = v_s_r<O<V>>(&mut cb.o, o_v(i_o));
+        let OuterNode{ key: _, value: v, parent: _} = Vector::swap_remove<OuterNode<V>>(&mut tree.outer_nodes, outer_index(i_o));
         // If destroyed outer node was not last outer node in vector,
         // repair the parent-child relationship broken by swap remove
-        if (o_v(i_o) < n_o - 1) stitch_swap_remove(cb, i_o, n_o);
+        if (outer_index(i_o) < n_o - 1) stitch_swap_remove(tree, i_o, n_o);
         v // Return popped value
     }
 
@@ -1509,98 +1495,98 @@ module Econia::CritBit {
     /// >                  101 <- sibling
     /// ```
     fun pop_general<V>(
-        cb: &mut CB<V>,
+        tree: &mut CribitTree<V>,
         k: u128,
         n_o: u64
     ): V {
         // Get field index of search outer node, its side as a child,
         // its key, and the vector index of its parent
-        let (i_s_o, s_s_o, k_s_o, i_s_p, _) = search_outer(cb, k);
+        let (i_s_o, s_s_o, k_s_o, idx_search_parent, _) = search_outer(tree, k);
         assert!(k_s_o == k, E_NOT_HAS_K); // Assert key in tree
         // Update sibling, parent, grandparent relationships
-        pop_update_relationships(cb, s_s_o, i_s_p);
+        pop_update_relationships(tree, s_s_o, idx_search_parent);
         // Destroy old nodes, returning popped value
-        pop_destroy_nodes(cb, i_s_p, i_s_o, n_o)
+        pop_destroy_nodes(tree, idx_search_parent, i_s_o, n_o)
     }
 
     /// Return the value corresponding to key `k` in singleton tree `cb`
     /// and destroy the outer node where it was stored, aborting if `k`
     /// not in `cb`
     fun pop_singleton<V>(
-        cb: &mut CB<V>,
+        tree: &mut CribitTree<V>,
         k: u128
     ): V {
         // Assert key actually in tree at root node
-        assert!(v_b<O<V>>(&cb.o, 0).k == k, E_NOT_HAS_K);
-        cb.r = 0; // Update root
+        assert!(Vector::borrow<OuterNode<V>>(&tree.outer_nodes, 0).key == k, E_NOT_HAS_K);
+        tree.root = 0; // Update root
         // Pop off and unpack outer node at root
-        let O{k: _, v, p: _} = v_po_b<O<V>>(&mut cb.o);
+        let OuterNode{ key: _, value: v, parent: _} = Vector::pop_back<OuterNode<V>>(&mut tree.outer_nodes);
         v // Return popped value
     }
 
-    /// Update relationships in `cb` for popping a node which is a child
+    /// Update relationships in `tree` for popping a node which is a child
     /// on side `s_c` (`L` or `R`), to parent node at index `i_p`, per
     /// `pop_general()`
     fun pop_update_relationships<V>(
-        cb: &mut CB<V>,
+        tree: &mut CribitTree<V>,
         s_c: bool,
         i_p: u64,
     ) {
         // Borrow immutable reference to popped node's parent
-        let p = v_b<I>(&cb.i, i_p);
+        let p = Vector::borrow<InnerNode>(&tree.inner_nodes, i_p);
         // If popped outer node was a left child, store the right child
         // field index of its parent as the child field index of the
         // popped node's sibling. Else flip the direction
-        let i_s = if (s_c == L) p.r else p.l;
+        let i_s = if (s_c == L) p.right else p.left;
         // Get parent field index of popped node's parent
-        let i_p_p = p.p;
+        let i_p_p = p.parent;
         // Update popped node's sibling to have at its parent index
         // field the same as that of the popped node's parent, whether
         // the sibling is an inner or outer node
-        if (is_out(i_s)) v_b_m<O<V>>(&mut cb.o, o_v(i_s)).p = i_p_p
-            else v_b_m<I>(&mut cb.i, i_s).p = i_p_p;
+        if (is_out(i_s)) Vector::borrow_mut<OuterNode<V>>(&mut tree.outer_nodes, outer_index(i_s)).parent = i_p_p
+            else Vector::borrow_mut<InnerNode>(&mut tree.inner_nodes, i_s).parent = i_p_p;
         if (i_p_p == ROOT) { // If popped node's parent is root
             // Set root field index to child field index of popped
             // node's sibling
-            cb.r = i_s;
+            tree.root = i_s;
         } else { // If popped node has a grandparent
             // Borrow mutable reference to popped node's grandparent
-            let g_p = v_b_m<I>(&mut cb.i, i_p_p);
+            let g_p = Vector::borrow_mut<InnerNode>(&mut tree.inner_nodes, i_p_p);
             // If popped node's parent was a left child, update popped
             // node's grandparent to have as its child the popped node's
             // sibling. Else the right child
-            if (g_p.l == i_p) g_p.l = i_s else g_p.r = i_s;
+            if (g_p.left == i_p) g_p.left = i_s else g_p.right = i_s;
         };
     }
 
-    /// Push back a new inner node and outer node into tree `cb`, where
+    /// Push back a new inner node and outer node into tree `tree`, where
     /// the new outer node should have key `k`, value `v`, and have as
-    /// its parent the new inner node at vector index `i_n_i`, which
-    /// should have critical bit `c`, parent field index `i_p`, and if
+    /// its parent the new inner node at vector index `idx_inner_node`, which
+    /// should have critical bit `critical_pos`, parent field index `i_p`, and if
     /// `i_n_c_c` is `true`, left child field index `c1` and right child
     /// field index `c2`. If the "inner node child condition" is `false`
     /// the polarity of the children should be flipped
     fun push_back_insert_nodes<V>(
-        cb: &mut CB<V>,
+        tree: &mut CribitTree<V>,
         k: u128,
         v: V,
-        i_n_i: u64,
-        c: u8,
-        i_p: u64,
-        i_n_c_c: bool,
-        c1: u64,
-        c2: u64,
+        idx_inner_node: u64,
+        critical_pos: u8,
+        idx_parent: u64,
+        is_idx2_larger: bool,
+        idx1: u64,
+        idx2: u64,
     ) {
         // If inner node child condition marked true, declare left child
         // field for new inner node as c1 and right as c2, else flip
-        let (l, r) = if (i_n_c_c) (c1, c2) else (c2, c1);
+        let (l, r) = if (is_idx2_larger) (idx1, idx2) else (idx2, idx1);
         // Push back new outer node with new inner node as parent
-        v_pu_b<O<V>>(&mut cb.o, O{k, v, p: i_n_i});
+        Vector::push_back<OuterNode<V>>(&mut tree.outer_nodes, OuterNode{ key: k, value: v, parent: idx_inner_node});
         // Push back new inner node with specified parent and children
-        v_pu_b<I>(&mut cb.i, I{c, p: i_p, l, r});
+        Vector::push_back<InnerNode>(&mut tree.inner_nodes, InnerNode{ critical_pos: critical_pos, parent: idx_parent, left: l, right: r });
     }
 
-    /// Walk from root tree `cb` having an inner node as its root,
+    /// Walk from root tree `tree` having an inner node as its root,
     /// branching left or right at each inner node depending on whether
     /// `k` is unset or set, respectively, at the given critical bit.
     /// After arriving at an outer node, then return:
@@ -1611,7 +1597,7 @@ module Econia::CritBit {
     /// * `u64`: vector index of parent of search outer node
     /// * `u8`: critical bit indicated by parent of search outer node
     fun search_outer<V>(
-        cb: &CB<V>,
+        tree: &CribitTree<V>,
         k: u128
     ): (
         u64,
@@ -1621,53 +1607,53 @@ module Econia::CritBit {
         u8,
     ) {
         // Initialize search parent to root
-        let s_p = v_b<I>(&cb.i, cb.r);
+        let s_p = Vector::borrow<InnerNode>(&tree.inner_nodes, tree.root);
         loop { // Loop over inner nodes until branching to outer node
             // If key set at critical bit, track field index and side of
             // R child, else L
-            let (i, s) = if (is_set(k, s_p.c)) (s_p.r, R) else (s_p.l, L);
+            let (i, side) = if (is_set(k, s_p.critical_pos)) (s_p.right, R) else (s_p.left, L);
             if (is_out(i)) { // If child is outer node
                 // Borrow immutable reference to it
-                let s_o = v_b<O<V>>(&cb.o, o_v(i));
+                let s_o = Vector::borrow<OuterNode<V>>(&tree.outer_nodes, outer_index(i));
                 // Return child field index of search outer node, its
                 // side as a child, its key, the vector index of its
                 // parent, and parent's indicated critical bit
-                return (i, s, s_o.k, s_o.p, s_p.c)
+                return (i, side, s_o.key, s_o.parent, s_p.critical_pos)
             };
-            s_p = v_b<I>(&cb.i, i); // Search next inner node
+            s_p = Vector::borrow<InnerNode>(&tree.inner_nodes, i); // Search next inner node
         }
     }
 
-    /// Update parent node at index `i_p` in `cb` to reflect as its
+    /// Update parent node at index `i_p` in `tree` to reflect as its
     /// child a node that has been relocated from old child field index
     /// `i_o` to new child field index `i_n`
     fun stitch_child_of_parent<V>(
-        cb: &mut CB<V>,
+        tree: &mut CribitTree<V>,
         i_n: u64,
         i_p: u64,
         i_o: u64
     ) {
         // Borrow mutable reference to parent
-        let p = v_b_m<I>(&mut cb.i, i_p);
+        let p = Vector::borrow_mut<InnerNode>(&mut tree.inner_nodes, i_p);
         // If relocated node was previously left child, update
         // parent's left child to indicate the relocated node's new
         // position, otherwise do update for right child of parent
-        if (p.l == i_o) p.l = i_n else p.r = i_n;
+        if (p.left == i_o) p.left = i_n else p.right = i_n;
     }
 
-    /// Update child node at child field index `i_c` in `cb` to reflect
+    /// Update child node at child field index `i_c` in `tree` to reflect
     /// as its parent an inner node that has be relocated to child field
     /// index `i_n`
     fun stitch_parent_of_child<V>(
-        cb: &mut CB<V>,
+        tree: &mut CribitTree<V>,
         i_n: u64,
         i_c: u64
     ) {
         // If child is an outer node, borrow corresponding node and
         // update its parent field index to that of relocated node
-        if (is_out(i_c)) v_b_m<O<V>>(&mut cb.o, o_v(i_c)).p = i_n
+        if (is_out(i_c)) Vector::borrow_mut<OuterNode<V>>(&mut tree.outer_nodes, outer_index(i_c)).parent = i_n
             // Otherwise perform update on an inner node
-            else v_b_m<I>(&mut cb.i, i_c).p = i_n;
+            else Vector::borrow_mut<InnerNode>(&mut tree.inner_nodes, i_c).parent = i_n;
     }
 
     /// Repair a broken parent-child relationship in `cb` caused by
@@ -1675,30 +1661,30 @@ module Econia::CritBit {
     /// child field index `i_n`, in vector that contained `n_n` nodes
     /// before the swap remove (when relocated node was last in vector)
     fun stitch_swap_remove<V>(
-        cb: &mut CB<V>,
+        tree: &mut CribitTree<V>,
         i_n: u64,
         n_n: u64
     ) {
         // If child field index indicates relocated outer node
         if (is_out(i_n)) {
             // Get node's parent field index
-            let i_p = v_b<O<V>>(&cb.o, o_v(i_n)).p;
+            let i_p = Vector::borrow<OuterNode<V>>(&tree.outer_nodes, outer_index(i_n)).parent;
             // If root node was relocated, update root field and return
-            if (i_p == ROOT) {cb.r = i_n; return};
+            if (i_p == ROOT) {tree.root = i_n; return};
             // Else update parent to reflect relocated node position
-            stitch_child_of_parent<V>(cb, i_n, i_p, o_c(n_n - 1));
+            stitch_child_of_parent<V>(tree, i_n, i_p, o_c(n_n - 1));
         } else { // If child field index indicates relocated inner node
             // Borrow mutable reference to it
-            let n = v_b<I>(&cb.i, i_n);
+            let n = Vector::borrow<InnerNode>(&tree.inner_nodes, i_n);
             // Get field index of node's parent and children
-            let (i_p, i_l, i_r) = (n.p, n.l, n.r);
+            let (i_p, i_l, i_r) = (n.parent, n.left, n.right);
             // Update children to have relocated node as their parent
-            stitch_parent_of_child(cb, i_n, i_l); // Left child
-            stitch_parent_of_child(cb, i_n, i_r); // Right child
+            stitch_parent_of_child(tree, i_n, i_l); // Left child
+            stitch_parent_of_child(tree, i_n, i_r); // Right child
             // If root node relocated, update root field and return
-            if (i_p == ROOT) {cb.r = i_n; return};
+            if (i_p == ROOT) {tree.root = i_n; return};
             // Else update parent to reflect relocated node position
-            stitch_child_of_parent<V>(cb, i_n, i_p, n_n - 1);
+            stitch_child_of_parent<V>(tree, i_n, i_p, n_n - 1);
         }
     }
 
@@ -1730,9 +1716,9 @@ module Econia::CritBit {
     /// # Parameters
     /// * `cb`: Crit-bit tree containing at least two nodes
     /// * `k`: Start key. If predecessor traversal, `k` cannot be
-    ///   minimum key in `cb`, since this key does not have a
+    ///   minimum key in `tree`, since this key does not have a
     ///   predecessor. Likewise, if successor traversal, `k` cannot be
-    ///   maximum key in `cb`, since this key does not have a successor
+    ///   maximum key in `tree`, since this key does not have a successor
     /// * `p_f`: Start node's parent field
     /// * `d`: Direction to traverse. If `L`, predecessor traversal,
     ///   else successor traversal
@@ -1746,30 +1732,30 @@ module Econia::CritBit {
     ///   maximum key in tree if successor traversal
     /// * Takes an exposed vector index (`p_f`) as a parameter
     fun traverse_c_i<V>(
-        cb: &CB<V>,
+        tree: &CribitTree<V>,
         k: u128,
         p_f: u64,
         d: bool,
     ): u64 {
         // Borrow immutable reference to start node's parent
-        let p = v_b<I>(&cb.i, p_f);
+        let p = Vector::borrow<InnerNode>(&tree.inner_nodes, p_f);
         // If start key is set at parent node's critical bit, then the
         // upward walk has reach an inner node via its right child. This
         // is the break condition for successor traversal, when d is L,
         // a constant value that evaluates to true. The inverse case
         // applies for predecessor traversal, so continue upward walk
         // as long as d is not equal to the conditional critbit check
-        while (d != is_set(k, p.c)) { // While break condition not met
+        while (d != is_set(k, p.critical_pos)) { // While break condition not met
             // Borrow immutable reference to next parent in upward walk
-            p = v_b<I>(&cb.i, p.p);
+            p = Vector::borrow<InnerNode>(&tree.inner_nodes, p.parent);
         }; // Now at apex node
         // If predecessor traversal get left child field of apex node,
         // else left right field
-        let c_f = if (d == L) p.l else p.r;
+        let c_f = if (d == L) p.left else p.right;
         while (!is_out(c_f)) { // While child field indicates inner node
             // If predecessor traversal review child's right child next,
             // else review child's left child next
-            c_f = if (d == L) v_b<I>(&cb.i, c_f).r else v_b<I>(&cb.i, c_f).l;
+            c_f = if (d == L) Vector::borrow<InnerNode>(&tree.inner_nodes, c_f).right else Vector::borrow<InnerNode>(&tree.inner_nodes, c_f).left;
         }; // Child field now indicates target node
         c_f // Return child field index of target node
     }
@@ -1790,11 +1776,11 @@ module Econia::CritBit {
     public fun u(
         s: vector<u8>
     ): u128 {
-        let n = v_l<u8>(&s); // Get number of bits
+        let n = Vector::length<u8>(&s); // Get number of bits
         let r = 0; // Initialize result to 0
         let i = 0; // Start loop at least significant bit
         while (i < n) { // While there are bits left to review
-            let b = *v_b<u8>(&s, n - 1 - i); // Get bit under review
+            let b = *Vector::borrow<u8>(&s, n - 1 - i); // Get bit under review
             if (b == 0x31) { // If the bit is 1 (0x31 in ASCII)
                 // OR result with the correspondingly leftshifted bit
                 r = r | 1 << (i as u8);
@@ -1807,14 +1793,14 @@ module Econia::CritBit {
 
     #[test_only]
     /// Return `u128` corresponding to concatenated result of `a`, `b`,
-    /// and `c`. Useful for line-wrapping long byte strings
+    /// and `critical_pos`. Useful for line-wrapping long byte strings
     public fun u_long(
         a: vector<u8>,
         b: vector<u8>,
-        c: vector<u8>
+        critical_pos: vector<u8>
     ): u128 {
-        v_a<u8>(&mut b, c); // Append c onto b
-        v_a<u8>(&mut a, b); // Append b onto a
+        Vector::append<u8>(&mut b, critical_pos); // Append critical_pos onto b
+        Vector::append<u8>(&mut a, b); // Append b onto a
         u(a) // Return u128 equivalent of concatenated bytestring
     }
 
@@ -1834,59 +1820,59 @@ module Econia::CritBit {
     #[expected_failure(abort_code = 3)]
     /// Assert failure for attempted borrow on empty tree
     fun borrow_empty() {
-        let cb = empty<u8>(); // Initialize empty tree
-        borrow<u8>(&cb, 0); // Attempt invalid borrow
-        destroy_empty(cb); // Destroy empty tree
+        let tree = empty<u8>(); // Initialize empty tree
+        borrow<u8>(&tree, 0); // Attempt invalid borrow
+        destroy_empty(tree); // Destroy empty tree
     }
 
     #[test]
     #[expected_failure(abort_code = 3)]
     /// Assert failure for attempted borrow on empty tree
     fun borrow_mut_empty() {
-        let cb = empty<u8>(); // Initialize empty tree
-        borrow_mut<u8>(&mut cb, 0); // Attempt invalid borrow
-        destroy_empty(cb); // Destroy empty tree
+        let tree = empty<u8>(); // Initialize empty tree
+        borrow_mut<u8>(&mut tree, 0); // Attempt invalid borrow
+        destroy_empty(tree); // Destroy empty tree
     }
 
     #[test]
     #[expected_failure(abort_code = 4)]
     /// Assert failure for attempted borrow without matching key
     fun borrow_mut_no_match():
-    CB<u8> {
-        let cb = singleton<u8>(3, 4); // Initialize singleton
-        borrow_mut<u8>(&mut cb, 6); // Attempt invalid borrow
-        cb // Return rather than unpack (or signal to compiler as much)
+    CribitTree<u8> {
+        let tree = singleton<u8>(3, 4); // Initialize singleton
+        borrow_mut<u8>(&mut tree, 6); // Attempt invalid borrow
+        tree // Return rather than unpack (or signal to compiler as much)
     }
 
     #[test]
     /// Assert correct modification of values
     fun borrow_mut_success():
-    CB<u8> {
-        let cb = empty<u8>(); // Initialize empty tree
+    CribitTree<u8> {
+        let tree = empty<u8>(); // Initialize empty tree
         // Insert assorted key-value pairs
-        insert(&mut cb, 2, 6);
-        insert(&mut cb, 3, 8);
-        insert(&mut cb, 1, 9);
-        insert(&mut cb, 7, 5);
+        insert(&mut tree, 2, 6);
+        insert(&mut tree, 3, 8);
+        insert(&mut tree, 1, 9);
+        insert(&mut tree, 7, 5);
         // Modify some of the values
-        *borrow_mut<u8>(&mut cb, 1) = 2;
-        *borrow_mut<u8>(&mut cb, 2) = 4;
+        *borrow_mut<u8>(&mut tree, 1) = 2;
+        *borrow_mut<u8>(&mut tree, 2) = 4;
         // Assert values are as expected
-        assert!(*borrow<u8>(&mut cb, 2) == 4, 0); // Changed
-        assert!(*borrow<u8>(&mut cb, 3) == 8, 0); // Unchanged
-        assert!(*borrow<u8>(&mut cb, 1) == 2, 0); // Changed
-        assert!(*borrow<u8>(&mut cb, 7) == 5, 0); // Unchanged
-        cb // Return rather than unpack
+        assert!(*borrow<u8>(&mut tree, 2) == 4, 0); // Changed
+        assert!(*borrow<u8>(&mut tree, 3) == 8, 0); // Unchanged
+        assert!(*borrow<u8>(&mut tree, 1) == 2, 0); // Changed
+        assert!(*borrow<u8>(&mut tree, 7) == 5, 0); // Unchanged
+        tree // Return rather than unpack
     }
 
     #[test]
     #[expected_failure(abort_code = 4)]
     /// Assert failure for attempted borrow without matching key
     fun borrow_no_match():
-    CB<u8> {
-        let cb = singleton<u8>(3, 4); // Initialize singleton
-        borrow<u8>(&cb, 6); // Attempt invalid borrow
-        cb // Return rather than unpack (or signal to compiler as much)
+    CribitTree<u8> {
+        let tree = singleton<u8>(3, 4); // Initialize singleton
+        borrow<u8>(&tree, 6); // Attempt invalid borrow
+        tree // Return rather than unpack (or signal to compiler as much)
     }
 
     #[test]
@@ -1927,21 +1913,21 @@ module Econia::CritBit {
     #[test]
     /// Verify empty tree destruction
     fun destroy_empty_success() {
-        let cb = empty<u8>(); // Initialize empty tree
-        destroy_empty<u8>(cb); // Destroy it
+        let tree = empty<u8>(); // Initialize empty tree
+        destroy_empty<u8>(tree); // Destroy it
     }
 
     #[test]
     /// Verify new tree created empty
     fun empty_success():
     (
-        vector<I>,
-        vector<O<u8>>
+        vector<InnerNode>,
+        vector<OuterNode<u8>>
     ) {
         // Unpack root index and node vectors
-        let CB{r, i, o} = empty<u8>();
-        assert!(v_i_e<I>(&i), 0); // Assert empty inner node vector
-        assert!(v_i_e<O<u8>>(&o), 1); // Assert empty outer node vector
+        let CribitTree{ root: r, inner_nodes: i, outer_nodes: o } = empty<u8>();
+        assert!(Vector::is_empty<InnerNode>(&i), 0); // Assert empty inner node vector
+        assert!(Vector::is_empty<OuterNode<u8>>(&o), 1); // Assert empty outer node vector
         assert!(r == 0, 0); // Assert root set to 0
         (i, o) // Return rather than unpack
     }
@@ -1949,20 +1935,20 @@ module Econia::CritBit {
     #[test]
     /// Verify returns `false` for empty tree
     fun has_key_empty_success() {
-        let cb = empty<u8>(); // Initialize empty tree
-        assert!(!has_key(&cb, 0), 0); // Assert key check returns false
-        destroy_empty<u8>(cb); // Drop empty tree
+        let tree = empty<u8>(); // Initialize empty tree
+        assert!(!has_key(&tree, 0), 0); // Assert key check returns false
+        destroy_empty<u8>(tree); // Drop empty tree
     }
 
     #[test]
     /// Verify successful key checks in special case of singleton tree
     fun has_key_singleton():
-    CB<u8> {
+    CribitTree<u8> {
         // Create singleton with key 1 and value 2
-        let cb = singleton<u8>(1, 2);
-        assert!(has_key(&cb, 1), 0); // Assert key of 1 registered
-        assert!(!has_key(&cb, 3), 0); // Assert key of 3 not registered
-        cb // Return rather than unpack
+        let tree = singleton<u8>(1, 2);
+        assert!(has_key(&tree, 1), 0); // Assert key of 1 registered
+        assert!(!has_key(&tree, 3), 0); // Assert key of 3 not registered
+        tree // Return rather than unpack
     }
 
     #[test]
@@ -1979,46 +1965,46 @@ module Econia::CritBit {
     /// >              o_i = 2 -> 110   111 <- o_i = 3
     /// ```
     fun has_key_success():
-    CB<u8> {
+    CribitTree<u8> {
         let v = 0; // Ignore values in key-value pairs by setting to 0
-        let cb = empty<u8>(); // Initialize empty tree
+        let tree = empty<u8>(); // Initialize empty tree
         // Append nodes per above tree
-        v_pu_b<I>(&mut cb.i, I{c: 2, p: ROOT, l: o_c(0), r:     1 });
-        v_pu_b<I>(&mut cb.i, I{c: 1, p:    0, l: o_c(1), r:     2 });
-        v_pu_b<I>(&mut cb.i, I{c: 0, p:    1, l: o_c(2), r: o_c(3)});
-        v_pu_b<O<u8>>(&mut cb.o, O{k: u(b"001"), v, p: 0});
-        v_pu_b<O<u8>>(&mut cb.o, O{k: u(b"101"), v, p: 1});
-        v_pu_b<O<u8>>(&mut cb.o, O{k: u(b"110"), v, p: 2});
-        v_pu_b<O<u8>>(&mut cb.o, O{k: u(b"111"), v, p: 2});
+        Vector::push_back<InnerNode>(&mut tree.inner_nodes, InnerNode{ critical_pos: 2, parent: ROOT, left: o_c(0), right:     1 });
+        Vector::push_back<InnerNode>(&mut tree.inner_nodes, InnerNode{ critical_pos: 1, parent:    0, left: o_c(1), right:     2 });
+        Vector::push_back<InnerNode>(&mut tree.inner_nodes, InnerNode{ critical_pos: 0, parent:    1, left: o_c(2), right: o_c(3)});
+        Vector::push_back<OuterNode<u8>>(&mut tree.outer_nodes, OuterNode{ key: u(b"001"), value: v, parent: 0});
+        Vector::push_back<OuterNode<u8>>(&mut tree.outer_nodes, OuterNode{ key: u(b"101"), value: v, parent: 1});
+        Vector::push_back<OuterNode<u8>>(&mut tree.outer_nodes, OuterNode{ key: u(b"110"), value: v, parent: 2});
+        Vector::push_back<OuterNode<u8>>(&mut tree.outer_nodes, OuterNode{ key: u(b"111"), value: v, parent: 2});
         // Assert correct membership checks
-        assert!(has_key(&cb, u(b"001")), 0);
-        assert!(has_key(&cb, u(b"101")), 1);
-        assert!(has_key(&cb, u(b"110")), 2);
-        assert!(has_key(&cb, u(b"111")), 3);
-        assert!(!has_key(&cb, u(b"011")), 4); // Not in tree
-        cb // Return rather than unpack
+        assert!(has_key(&tree, u(b"001")), 0);
+        assert!(has_key(&tree, u(b"101")), 1);
+        assert!(has_key(&tree, u(b"110")), 2);
+        assert!(has_key(&tree, u(b"111")), 3);
+        assert!(!has_key(&tree, u(b"011")), 4); // Not in tree
+        tree // Return rather than unpack
     }
 
     #[test]
     #[expected_failure(abort_code = 2)]
     /// Verify aborts when key already in tree
     fun insert_general_failure():
-    CB<u8> {
-        let cb = singleton<u8>(3, 4); // Initialize singleton
-        insert_singleton(&mut cb, 5, 6); // Insert onto singleton
+    CribitTree<u8> {
+        let tree = singleton<u8>(3, 4); // Initialize singleton
+        insert_singleton(&mut tree, 5, 6); // Insert onto singleton
         // Attempt insert for general case, but with duplicate key
-        insert_general(&mut cb, 5, 7, 2);
-        cb // Return rather than unpack (or signal to compiler as much)
+        insert_general(&mut tree, 5, 7, 2);
+        tree // Return rather than unpack (or signal to compiler as much)
     }
 
     #[test]
     #[expected_failure(abort_code = 2)]
     /// Verify failure for attempting duplicate insertion on singleton
     fun insert_singleton_failure():
-    CB<u8> {
-        let cb = singleton<u8>(1, 2); // Initialize singleton
-        insert_singleton(&mut cb, 1, 5); // Attempt to insert same key
-        cb // Return rather than unpack (or signal to compiler as much)
+    CribitTree<u8> {
+        let tree = singleton<u8>(1, 2); // Initialize singleton
+        insert_singleton(&mut tree, 1, 5); // Attempt to insert same key
+        tree // Return rather than unpack (or signal to compiler as much)
     }
 
     #[test]
@@ -2030,21 +2016,21 @@ module Econia::CritBit {
     /// ```
     fun insert_singleton_success_l():
     (
-        CB<u8>
+        CribitTree<u8>
     ) {
-        let cb = singleton<u8>(u(b"1111"), 4); // Initialize singleton
-        insert_singleton(&mut cb, u(b"1101"), 5); // Insert to left
-        assert!(cb.r == 0, 0); // Assert root is at new inner node
-        let i = v_b<I>(&cb.i, 0); // Borrow inner node at root
+        let tree = singleton<u8>(u(b"1111"), 4); // Initialize singleton
+        insert_singleton(&mut tree, u(b"1101"), 5); // Insert to left
+        assert!(tree.root == 0, 0); // Assert root is at new inner node
+        let i = Vector::borrow<InnerNode>(&tree.inner_nodes, 0); // Borrow inner node at root
         // Assert root inner node values are as expected
-        assert!(i.c == 1 && i.p == ROOT && i.l == o_c(1) && i.r == o_c(0), 1);
-        let o_o = v_b<O<u8>>(&cb.o, 0); // Borrow original outer node
+        assert!(i.critical_pos == 1 && i.parent == ROOT && i.left == o_c(1) && i.right == o_c(0), 1);
+        let o_o = Vector::borrow<OuterNode<u8>>(&tree.outer_nodes, 0); // Borrow original outer node
         // Assert original outer node values are as expected
-        assert!(o_o.k == u(b"1111") && o_o.v == 4 && o_o.p == 0, 2);
-        let n_o = v_b<O<u8>>(&cb.o, 1); // Borrow new outer node
+        assert!(o_o.key == u(b"1111") && o_o.value == 4 && o_o.parent == 0, 2);
+        let n_o = Vector::borrow<OuterNode<u8>>(&tree.outer_nodes, 1); // Borrow new outer node
         // Assert new outer node values are as expected
-        assert!(n_o.k == u(b"1101") && n_o.v == 5 && n_o.p == 0, 3);
-        cb // Return rather than unpack
+        assert!(n_o.key == u(b"1101") && n_o.value == 5 && n_o.parent == 0, 3);
+        tree // Return rather than unpack
     }
 
     #[test]
@@ -2055,20 +2041,20 @@ module Econia::CritBit {
     /// >               ----->    1011     1111
     /// ```
     fun insert_singleton_success_r():
-    CB<u8> {
-        let cb = singleton<u8>(u(b"1011"), 6); // Initialize singleton
-        insert_singleton(&mut cb, u(b"1111"), 7); // Insert to right
-        assert!(cb.r == 0, 0); // Assert root is at new inner node
-        let i = v_b<I>(&cb.i, 0); // Borrow inner node at root
+    CribitTree<u8> {
+        let tree = singleton<u8>(u(b"1011"), 6); // Initialize singleton
+        insert_singleton(&mut tree, u(b"1111"), 7); // Insert to right
+        assert!(tree.root == 0, 0); // Assert root is at new inner node
+        let i = Vector::borrow<InnerNode>(&tree.inner_nodes, 0); // Borrow inner node at root
         // Assert root inner node values are as expected
-        assert!(i.c == 2 && i.p == ROOT && i.l == o_c(0) && i.r == o_c(1), 1);
-        let o_o = v_b<O<u8>>(&cb.o, 0); // Borrow original outer node
+        assert!(i.critical_pos == 2 && i.parent == ROOT && i.left == o_c(0) && i.right == o_c(1), 1);
+        let o_o = Vector::borrow<OuterNode<u8>>(&tree.outer_nodes, 0); // Borrow original outer node
         // Assert original outer node values are as expected
-        assert!(o_o.k == u(b"1011") && o_o.v == 6 && o_o.p == 0, 2);
-        let n_o = v_b<O<u8>>(&cb.o, 1); // Borrow new outer node
+        assert!(o_o.key == u(b"1011") && o_o.value == 6 && o_o.parent == 0, 2);
+        let n_o = Vector::borrow<OuterNode<u8>>(&tree.outer_nodes, 1); // Borrow new outer node
         // Assert new outer node values are as expected
-        assert!(n_o.k == u(b"1111") && n_o.v == 7 && o_o.p == 0, 3);
-        cb // Return rather than unpack
+        assert!(n_o.key == u(b"1111") && n_o.value == 7 && o_o.parent == 0, 3);
+        tree // Return rather than unpack
     }
 
     #[test]
@@ -2108,37 +2094,37 @@ module Econia::CritBit {
     /// >         o_i = 2 -> 1100     1101 <- o_i = 0
     /// ```
     fun insert_success_1():
-    CB<u8> {
-        let cb = empty(); // Initialize empty tree
+    CribitTree<u8> {
+        let tree = empty(); // Initialize empty tree
         // Insert various key-value pairs
-        insert(&mut cb, u(b"1101"), 0);
-        insert(&mut cb, u(b"1000"), 1);
-        insert(&mut cb, u(b"1100"), 2);
-        insert(&mut cb, u(b"1110"), 3);
-        insert(&mut cb, u(b"0000"), 4);
+        insert(&mut tree, u(b"1101"), 0);
+        insert(&mut tree, u(b"1000"), 1);
+        insert(&mut tree, u(b"1100"), 2);
+        insert(&mut tree, u(b"1110"), 3);
+        insert(&mut tree, u(b"0000"), 4);
         // Verify root field indicates correct inner node
-        assert!(cb.r == 3, 0);
+        assert!(tree.root == 3, 0);
         // Verify inner node fields in ascending order of vector index
-        let i = v_b<I>(&cb.i, 0);
-        assert!(i.c == 2 && i.p ==    3 && i.l == o_c(1) && i.r ==     2 , 1);
-        let i = v_b<I>(&cb.i, 1);
-        assert!(i.c == 0 && i.p ==    2 && i.l == o_c(2) && i.r == o_c(0), 2);
-        let i = v_b<I>(&cb.i, 2);
-        assert!(i.c == 1 && i.p ==    0 && i.l ==     1  && i.r == o_c(3), 3);
-        let i = v_b<I>(&cb.i, 3);
-        assert!(i.c == 3 && i.p == ROOT && i.l == o_c(4) && i.r ==     0 , 4);
+        let i = Vector::borrow<InnerNode>(&tree.inner_nodes, 0);
+        assert!(i.critical_pos == 2 && i.parent ==    3 && i.left == o_c(1) && i.right ==     2 , 1);
+        let i = Vector::borrow<InnerNode>(&tree.inner_nodes, 1);
+        assert!(i.critical_pos == 0 && i.parent ==    2 && i.left == o_c(2) && i.right == o_c(0), 2);
+        let i = Vector::borrow<InnerNode>(&tree.inner_nodes, 2);
+        assert!(i.critical_pos == 1 && i.parent ==    0 && i.left ==     1  && i.right == o_c(3), 3);
+        let i = Vector::borrow<InnerNode>(&tree.inner_nodes, 3);
+        assert!(i.critical_pos == 3 && i.parent == ROOT && i.left == o_c(4) && i.right ==     0 , 4);
         // Verify outer node fields in ascending order of vector index
-        let o = v_b<O<u8>>(&cb.o, 0);
-        assert!(o.k == u(b"1101") && o.v == 0 && o.p == 1, 5);
-        let o = v_b<O<u8>>(&cb.o, 1);
-        assert!(o.k == u(b"1000") && o.v == 1 && o.p == 0, 6);
-        let o = v_b<O<u8>>(&cb.o, 2);
-        assert!(o.k == u(b"1100") && o.v == 2 && o.p == 1, 7);
-        let o = v_b<O<u8>>(&cb.o, 3);
-        assert!(o.k == u(b"1110") && o.v == 3 && o.p == 2, 8);
-        let o = v_b<O<u8>>(&cb.o, 4);
-        assert!(o.k == u(b"0000") && o.v == 4 && o.p == 3, 9);
-        cb // Return rather than unpack
+        let o = Vector::borrow<OuterNode<u8>>(&tree.outer_nodes, 0);
+        assert!(o.key == u(b"1101") && o.value == 0 && o.parent == 1, 5);
+        let o = Vector::borrow<OuterNode<u8>>(&tree.outer_nodes, 1);
+        assert!(o.key == u(b"1000") && o.value == 1 && o.parent == 0, 6);
+        let o = Vector::borrow<OuterNode<u8>>(&tree.outer_nodes, 2);
+        assert!(o.key == u(b"1100") && o.value == 2 && o.parent == 1, 7);
+        let o = Vector::borrow<OuterNode<u8>>(&tree.outer_nodes, 3);
+        assert!(o.key == u(b"1110") && o.value == 3 && o.parent == 2, 8);
+        let o = Vector::borrow<OuterNode<u8>>(&tree.outer_nodes, 4);
+        assert!(o.key == u(b"0000") && o.value == 4 && o.parent == 3, 9);
+        tree // Return rather than unpack
     }
 
     #[test]
@@ -2176,49 +2162,49 @@ module Econia::CritBit {
     /// >    o_i = 1 -> 0000     0001 <- o_i = 2
     /// ```
     fun insert_success_2():
-    CB<u8> {
-        let cb = empty(); // Initialize empty tree
+    CribitTree<u8> {
+        let tree = empty(); // Initialize empty tree
         // Insert various key-value pairs
-        insert(&mut cb, u(b"0101"), 0);
-        insert(&mut cb, u(b"0000"), 1);
-        insert(&mut cb, u(b"0001"), 2);
-        insert(&mut cb, u(b"1000"), 3);
-        insert(&mut cb, u(b"0011"), 4);
+        insert(&mut tree, u(b"0101"), 0);
+        insert(&mut tree, u(b"0000"), 1);
+        insert(&mut tree, u(b"0001"), 2);
+        insert(&mut tree, u(b"1000"), 3);
+        insert(&mut tree, u(b"0011"), 4);
         // Verify root field indicates correct inner node
-        assert!(cb.r == 2, 0);
+        assert!(tree.root == 2, 0);
         // Verify inner node fields in ascending order of vector index
-        let i = v_b<I>(&cb.i, 0);
-        assert!(i.c == 2 && i.p ==    2 && i.l ==     3  && i.r == o_c(0), 1);
-        let i = v_b<I>(&cb.i, 1);
-        assert!(i.c == 0 && i.p ==    3 && i.l == o_c(1) && i.r == o_c(2), 2);
-        let i = v_b<I>(&cb.i, 2);
-        assert!(i.c == 3 && i.p == ROOT && i.l ==     0  && i.r == o_c(3), 3);
-        let i = v_b<I>(&cb.i, 3);
-        assert!(i.c == 1 && i.p ==    0 && i.l ==     1  && i.r == o_c(4), 4);
+        let i = Vector::borrow<InnerNode>(&tree.inner_nodes, 0);
+        assert!(i.critical_pos == 2 && i.parent ==    2 && i.left ==     3  && i.right == o_c(0), 1);
+        let i = Vector::borrow<InnerNode>(&tree.inner_nodes, 1);
+        assert!(i.critical_pos == 0 && i.parent ==    3 && i.left == o_c(1) && i.right == o_c(2), 2);
+        let i = Vector::borrow<InnerNode>(&tree.inner_nodes, 2);
+        assert!(i.critical_pos == 3 && i.parent == ROOT && i.left ==     0  && i.right == o_c(3), 3);
+        let i = Vector::borrow<InnerNode>(&tree.inner_nodes, 3);
+        assert!(i.critical_pos == 1 && i.parent ==    0 && i.left ==     1  && i.right == o_c(4), 4);
         // Verify outer node fields in ascending order of vector index
-        let o = v_b<O<u8>>(&cb.o, 0);
-        assert!(o.k == u(b"0101") && o.v == 0 && o.p == 0, 5);
-        let o = v_b<O<u8>>(&cb.o, 1);
-        assert!(o.k == u(b"0000") && o.v == 1 && o.p == 1, 6);
-        let o = v_b<O<u8>>(&cb.o, 2);
-        assert!(o.k == u(b"0001") && o.v == 2 && o.p == 1, 7);
-        let o = v_b<O<u8>>(&cb.o, 3);
-        assert!(o.k == u(b"1000") && o.v == 3 && o.p == 2, 8);
-        let o = v_b<O<u8>>(&cb.o, 4);
-        assert!(o.k == u(b"0011") && o.v == 4 && o.p == 3, 9);
-        cb // Return rather than unpack
+        let o = Vector::borrow<OuterNode<u8>>(&tree.outer_nodes, 0);
+        assert!(o.key == u(b"0101") && o.value == 0 && o.parent == 0, 5);
+        let o = Vector::borrow<OuterNode<u8>>(&tree.outer_nodes, 1);
+        assert!(o.key == u(b"0000") && o.value == 1 && o.parent == 1, 6);
+        let o = Vector::borrow<OuterNode<u8>>(&tree.outer_nodes, 2);
+        assert!(o.key == u(b"0001") && o.value == 2 && o.parent == 1, 7);
+        let o = Vector::borrow<OuterNode<u8>>(&tree.outer_nodes, 3);
+        assert!(o.key == u(b"1000") && o.value == 3 && o.parent == 2, 8);
+        let o = Vector::borrow<OuterNode<u8>>(&tree.outer_nodes, 4);
+        assert!(o.key == u(b"0011") && o.value == 4 && o.parent == 3, 9);
+        tree // Return rather than unpack
     }
 
     #[test]
     /// Verify emptiness check validity
     fun is_empty_success():
-    CB<u8> {
-        let cb = empty<u8>(); // Get empty tree
-        assert!(is_empty<u8>(&cb), 0); // Assert is empty
-        insert_empty<u8>(&mut cb, 1, 2); // Insert key 1 and value 2
+    CribitTree<u8> {
+        let tree = empty<u8>(); // Get empty tree
+        assert!(is_empty<u8>(&tree), 0); // Assert is empty
+        insert_empty<u8>(&mut tree, 1, 2); // Insert key 1 and value 2
         // Assert not marked empty
-        assert!(!is_empty<u8>(&cb), 0);
-        cb // Return rather than unpack
+        assert!(!is_empty<u8>(&tree), 0);
+        tree // Return rather than unpack
     }
 
     #[test]
@@ -2238,67 +2224,67 @@ module Econia::CritBit {
     #[test]
     /// Verify length check validity
     fun length_success():
-    CB<u8> {
-        let cb = empty(); // Initialize empty tree
-        assert!(length<u8>(&cb) == 0, 0); // Assert length is 0
-        insert(&mut cb, 1, 2); // Insert
-        assert!(length<u8>(&cb) == 1, 1); // Assert length is 1
-        insert(&mut cb, 3, 4); // Insert
-        assert!(length<u8>(&cb) == 2, 2); // Assert length is 2
-        cb // Return rather than unpack
+    CribitTree<u8> {
+        let tree = empty(); // Initialize empty tree
+        assert!(length<u8>(&tree) == 0, 0); // Assert length is 0
+        insert(&mut tree, 1, 2); // Insert
+        assert!(length<u8>(&tree) == 1, 1); // Assert length is 1
+        insert(&mut tree, 3, 4); // Insert
+        assert!(length<u8>(&tree) == 2, 2); // Assert length is 2
+        tree // Return rather than unpack
     }
 
     #[test]
     #[expected_failure(abort_code = 7)]
     /// Verify maximum key lookup failure when tree empty
     fun max_key_failure_empty() {
-        let cb = empty<u8>(); // Initialize empty tree
-        let _ = max_key(&cb); // Attempt invalid lookup
-        destroy_empty(cb);
+        let tree = empty<u8>(); // Initialize empty tree
+        let _ = max_key(&tree); // Attempt invalid lookup
+        destroy_empty(tree);
     }
 
     #[test]
     /// Verify correct maximum key lookup
     fun max_key_success():
-    CB<u8> {
-        let cb = singleton(3, 5); // Initialize singleton
-        assert!(max_key(&cb) == 3, 0); // Assert correct lookup
+    CribitTree<u8> {
+        let tree = singleton(3, 5); // Initialize singleton
+        assert!(max_key(&tree) == 3, 0); // Assert correct lookup
         // Insert additional values
-        insert(&mut cb, 2, 7);
-        insert(&mut cb, 5, 8);
-        insert(&mut cb, 4, 6);
-        assert!(max_key(&cb) == 5, 0); // Assert correct lookup
-        cb // Return rather than unpack
+        insert(&mut tree, 2, 7);
+        insert(&mut tree, 5, 8);
+        insert(&mut tree, 4, 6);
+        assert!(max_key(&tree) == 5, 0); // Assert correct lookup
+        tree // Return rather than unpack
     }
 
     #[test]
     #[expected_failure(abort_code = 7)]
     /// Verify minimum key lookup failure when tree empty
     fun min_key_failure_empty() {
-        let cb = empty<u8>(); // Initialize empty tree
-        let _ = min_key(&cb); // Attempt invalid lookup
-        destroy_empty(cb);
+        let tree = empty<u8>(); // Initialize empty tree
+        let _ = min_key(&tree); // Attempt invalid lookup
+        destroy_empty(tree);
     }
 
     #[test]
     /// Verify correct minimum key lookup
     fun min_key_success():
-    CB<u8> {
-        let cb = singleton(3, 5); // Initialize singleton
-        assert!(min_key(&cb) == 3, 0); // Assert correct lookup
+    CribitTree<u8> {
+        let tree = singleton(3, 5); // Initialize singleton
+        assert!(min_key(&tree) == 3, 0); // Assert correct lookup
         // Insert additional values
-        insert(&mut cb, 2, 7);
-        insert(&mut cb, 5, 8);
-        insert(&mut cb, 1, 6);
-        assert!(min_key(&cb) == 1, 0); // Assert correct lookup
-        cb // Return rather than unpack
+        insert(&mut tree, 2, 7);
+        insert(&mut tree, 5, 8);
+        insert(&mut tree, 1, 6);
+        assert!(min_key(&tree) == 1, 0); // Assert correct lookup
+        tree // Return rather than unpack
     }
 
     #[test]
     /// Verify correct returns
     fun o_v_success() {
-        assert!(o_v(OUT << N_TYPE) == 0, 0);
-        assert!(o_v(OUT << N_TYPE | 123) == 123, 1); }
+        assert!(outer_index(OUT << N_TYPE) == 0, 0);
+        assert!(outer_index(OUT << N_TYPE | 123) == 123, 1); }
 
     #[test]
     /// Verify correct returns
@@ -2311,20 +2297,20 @@ module Econia::CritBit {
     #[expected_failure(abort_code = 6)]
     /// Verify failure for attempting to pop from empty tree
     fun pop_failure_empty() {
-        let cb = empty<u8>(); // Initialize empty tree
-        let _ = pop(&mut cb, 3); // Attempt invalid pop
-        destroy_empty(cb); // Destroy empty tree
+        let tree = empty<u8>(); // Initialize empty tree
+        let _ = pop(&mut tree, 3); // Attempt invalid pop
+        destroy_empty(tree); // Destroy empty tree
     }
 
     #[test]
     #[expected_failure(abort_code = 4)]
     /// Verify failure for attempting to pop key not in tree
     fun pop_general_failure_no_key():
-    CB<u8> {
-        let cb = singleton(1, 7); // Initialize singleton
-        insert(&mut cb, 2, 8); // Add a second element
-        let _ = pop(&mut cb, 3); // Attempt invalid pop
-        cb // Return rather than unpack (or signal to compiler as much)
+    CribitTree<u8> {
+        let tree = singleton(1, 7); // Initialize singleton
+        insert(&mut tree, 2, 8); // Add a second element
+        let _ = pop(&mut tree, 3); // Attempt invalid pop
+        tree // Return rather than unpack (or signal to compiler as much)
     }
 
     #[test]
@@ -2346,26 +2332,26 @@ module Econia::CritBit {
     /// >    o_i = 0 -> 001   101 <- o_i = 1
     /// ```
     fun pop_general_success_1():
-    CB<u8> {
+    CribitTree<u8> {
         // Initialize singleton for node to be popped
-        let cb = singleton(u(b"111"), 7);
+        let tree = singleton(u(b"111"), 7);
         // Insert sibling, generating inner node marked 1st
-        insert(&mut cb, u(b"101"), 8);
+        insert(&mut tree, u(b"101"), 8);
         // Insert key 001, generating new inner node marked 2nd, at root
-        insert(&mut cb, u(b"001"), 9);
+        insert(&mut tree, u(b"001"), 9);
         // Assert correct pop value for key 111
-        assert!(pop_general(&mut cb, u(b"111"), 3) == 7, 0);
-        assert!(cb.r == 0, 1); // Assert root field updated
-        let r = v_b<I>(&mut cb.i, 0); // Borrow inner node at root
+        assert!(pop_general(&mut tree, u(b"111"), 3) == 7, 0);
+        assert!(tree.root == 0, 1); // Assert root field updated
+        let r = Vector::borrow<InnerNode>(&mut tree.inner_nodes, 0); // Borrow inner node at root
         // Assert root inner node fields are as expected
-        assert!(r.c == 2 && r.p == ROOT && r.l == o_c(0) && r.r == o_c(1), 2);
-        let o_l = v_b<O<u8>>(&mut cb.o, 0); // Borrow outer node on left
+        assert!(r.critical_pos == 2 && r.parent == ROOT && r.left == o_c(0) && r.right == o_c(1), 2);
+        let o_l = Vector::borrow<OuterNode<u8>>(&mut tree.outer_nodes, 0); // Borrow outer node on left
         // Assert left outer node fields are as expected
-        assert!(o_l.k == u(b"001") && o_l.v == 9 && o_l.p == 0, 3);
-        let o_r = v_b<O<u8>>(&mut cb.o, 1); // Borrow outer node on right
+        assert!(o_l.key == u(b"001") && o_l.value == 9 && o_l.parent == 0, 3);
+        let o_r = Vector::borrow<OuterNode<u8>>(&mut tree.outer_nodes, 1); // Borrow outer node on right
         // Assert right outer node fields are as expected
-        assert!(o_r.k == u(b"101") && o_r.v == 8 && o_r.p == 0, 4);
-        cb // Return rather than unpack
+        assert!(o_r.key == u(b"101") && o_r.value == 8 && o_r.parent == 0, 4);
+        tree // Return rather than unpack
     }
 
     #[test]
@@ -2407,80 +2393,80 @@ module Econia::CritBit {
     /// ```
     fun pop_general_success_2() {
         // Initialize singleton tree with key-value pair {011, 5}
-        let cb = singleton(u(b"011"), 5); // Initialize singleton tree
-        insert(&mut cb, u(b"010"), 6); // Insert {010, 6}
-        insert(&mut cb, u(b"001"), 7); // Insert {001, 7}
-        insert(&mut cb, u(b"111"), 8); // Insert {001, 8}
-        assert!(pop(&mut cb, u(b"001")) == 7, 0); // Assert correct pop
-        assert!(cb.r == 1, 1); // Assert root field updated correctly
+        let tree = singleton(u(b"011"), 5); // Initialize singleton tree
+        insert(&mut tree, u(b"010"), 6); // Insert {010, 6}
+        insert(&mut tree, u(b"001"), 7); // Insert {001, 7}
+        insert(&mut tree, u(b"111"), 8); // Insert {001, 8}
+        assert!(pop(&mut tree, u(b"001")) == 7, 0); // Assert correct pop
+        assert!(tree.root == 1, 1); // Assert root field updated correctly
         // Verify post-pop inner node fields in ascending order of index
-        let i = v_b<I>(&cb.i, 0);
-        assert!(i.c == 0 && i.p ==    1 && i.l == o_c(1) && i.r == o_c(0), 2);
-        let i = v_b<I>(&cb.i, 1);
-        assert!(i.c == 2 && i.p == ROOT && i.l ==     0  && i.r == o_c(2), 3);
+        let i = Vector::borrow<InnerNode>(&tree.inner_nodes, 0);
+        assert!(i.critical_pos == 0 && i.parent ==    1 && i.left == o_c(1) && i.right == o_c(0), 2);
+        let i = Vector::borrow<InnerNode>(&tree.inner_nodes, 1);
+        assert!(i.critical_pos == 2 && i.parent == ROOT && i.left ==     0  && i.right == o_c(2), 3);
         // Verify outer node fields in ascending order of vector index
-        let o = v_b<O<u8>>(&cb.o, 0);
-        assert!(o.k == u(b"011") && o.v == 5 && o.p == 0, 4);
-        let o = v_b<O<u8>>(&cb.o, 1);
-        assert!(o.k == u(b"010") && o.v == 6 && o.p == 0, 5);
-        let o = v_b<O<u8>>(&cb.o, 2);
-        assert!(o.k == u(b"111") && o.v == 8 && o.p == 1, 6);
-        assert!(pop(&mut cb, u(b"111")) == 8, 7); // Assert correct pop
-        assert!(cb.r == 0, 8); // Assert root field updated correctly
+        let o = Vector::borrow<OuterNode<u8>>(&tree.outer_nodes, 0);
+        assert!(o.key == u(b"011") && o.value == 5 && o.parent == 0, 4);
+        let o = Vector::borrow<OuterNode<u8>>(&tree.outer_nodes, 1);
+        assert!(o.key == u(b"010") && o.value == 6 && o.parent == 0, 5);
+        let o = Vector::borrow<OuterNode<u8>>(&tree.outer_nodes, 2);
+        assert!(o.key == u(b"111") && o.value == 8 && o.parent == 1, 6);
+        assert!(pop(&mut tree, u(b"111")) == 8, 7); // Assert correct pop
+        assert!(tree.root == 0, 8); // Assert root field updated correctly
         // Verify post-pop inner node fields at root
-        let i = v_b<I>(&cb.i, 0);
-        assert!(i.c == 0 && i.p == ROOT && i.l == o_c(1) && i.r == o_c(0), 9);
+        let i = Vector::borrow<InnerNode>(&tree.inner_nodes, 0);
+        assert!(i.critical_pos == 0 && i.parent == ROOT && i.left == o_c(1) && i.right == o_c(0), 9);
         // Verify outer node fields in ascending order of vector index
-        let o = v_b<O<u8>>(&cb.o, 0);
-        assert!(o.k == u(b"011") && o.v == 5 && o.p == 0, 10);
-        let o = v_b<O<u8>>(&cb.o, 1);
-        assert!(o.k == u(b"010") && o.v == 6 && o.p == 0, 11);
-        assert!(pop(&mut cb, u(b"011")) == 5, 12); // Assert correct pop
-        assert!(cb.r == o_c(0), 13); // Assert correct root field update
+        let o = Vector::borrow<OuterNode<u8>>(&tree.outer_nodes, 0);
+        assert!(o.key == u(b"011") && o.value == 5 && o.parent == 0, 10);
+        let o = Vector::borrow<OuterNode<u8>>(&tree.outer_nodes, 1);
+        assert!(o.key == u(b"010") && o.value == 6 && o.parent == 0, 11);
+        assert!(pop(&mut tree, u(b"011")) == 5, 12); // Assert correct pop
+        assert!(tree.root == o_c(0), 13); // Assert correct root field update
         // Verify post-pop outer node fields at root
-        let o = v_b<O<u8>>(&cb.o, 0);
-        assert!(o.k == u(b"010") && o.v == 6 && o.p == ROOT, 14);
-        assert!(pop(&mut cb, u(b"010")) == 6, 15); // Assert correct pop
-        assert!(cb.r == 0, 16); // Assert root field updated correctly
-        assert!(is_empty(&cb), 17); // Assert is empty
-        destroy_empty(cb); // Destroy
+        let o = Vector::borrow<OuterNode<u8>>(&tree.outer_nodes, 0);
+        assert!(o.key == u(b"010") && o.value == 6 && o.parent == ROOT, 14);
+        assert!(pop(&mut tree, u(b"010")) == 6, 15); // Assert correct pop
+        assert!(tree.root == 0, 16); // Assert root field updated correctly
+        assert!(is_empty(&tree), 17); // Assert is empty
+        destroy_empty(tree); // Destroy
     }
 
     #[test]
     #[expected_failure(abort_code = 4)]
     // Verify pop failure when key not in tree
     fun pop_singleton_failure():
-    CB<u8> {
-        let cb = singleton(1, 2); // Initialize singleton
-        let _ = pop_singleton<u8>(&mut cb, 3); // Attempt invalid pop
-        cb // Return rather than unpack (or signal to compiler as much)
+    CribitTree<u8> {
+        let tree = singleton(1, 2); // Initialize singleton
+        let _ = pop_singleton<u8>(&mut tree, 3); // Attempt invalid pop
+        tree // Return rather than unpack (or signal to compiler as much)
     }
 
     #[test]
     // Verify successful pop
     fun pop_singleton_success() {
-        let cb = singleton(1, 2); // Initialize singleton
-        assert!(pop_singleton(&mut cb, 1) == 2, 0); // Verify pop value
-        assert!(is_empty(&mut cb), 1); // Assert marked as empty
-        assert!(cb.r == 0, 2); // Assert root index field updated
-        destroy_empty<u8>(cb); // Destroy empty tree
+        let tree = singleton(1, 2); // Initialize singleton
+        assert!(pop_singleton(&mut tree, 1) == 2, 0); // Verify pop value
+        assert!(is_empty(&mut tree), 1); // Assert marked as empty
+        assert!(tree.root == 0, 2); // Assert root index field updated
+        destroy_empty<u8>(tree); // Destroy empty tree
     }
 
     #[test]
     /// Verify singleton initialized with correct values
     fun singleton_success():
     (
-        vector<I>,
-        vector<O<u8>>,
+        vector<InnerNode>,
+        vector<OuterNode<u8>>,
     ) {
-        let cb = singleton<u8>(2, 3); // Initialize w/ key 2 and value 3
-        assert!(v_i_e<I>(&cb.i), 0); // Assert no inner nodes
-        assert!(v_l<O<u8>>(&cb.o) == 1, 1); // Assert single outer node
-        let CB{r, i, o} = cb; // Unpack root index and node vectors
+        let tree = singleton<u8>(2, 3); // Initialize w/ key 2 and value 3
+        assert!(Vector::is_empty<InnerNode>(&tree.inner_nodes), 0); // Assert no inner nodes
+        assert!(Vector::length<OuterNode<u8>>(&tree.outer_nodes) == 1, 1); // Assert single outer node
+        let CribitTree{ root: r, inner_nodes: i, outer_nodes: o } = tree; // Unpack root index and node vectors
         // Assert root index field indicates 0th outer node
         assert!(r == OUT << N_TYPE, 2);
         // Pop and unpack last node from vector of outer nodes
-        let O{k, v, p} = v_po_b<O<u8>>(&mut o);
+        let OuterNode{ key: k, value: v, parent: p } = Vector::pop_back<OuterNode<u8>>(&mut o);
         // Assert values in node are as expected
         assert!(k == 2 && v == 3 && p == ROOT, 3);
         (i, o) // Return rather than unpack
@@ -2497,29 +2483,29 @@ module Econia::CritBit {
     /// >           o_i = 1 -> 001   011 <- o_i = 2
     /// ```
     fun stitch_swap_remove_i_l():
-    CB<u8> {
+    CribitTree<u8> {
         let v = 0; // Ignore values in key-value pairs by setting to 0
-        let cb = empty<u8>(); // Initialize empty tree
+        let tree = empty<u8>(); // Initialize empty tree
         // Append nodes per above tree, including bogus inner node at
         // vector index 1, which will be swap removed
-        v_pu_b<I>(&mut cb.i, I{c: 2, p: ROOT, l:     2 , r: o_c(0)});
+        Vector::push_back<InnerNode>(&mut tree.inner_nodes, InnerNode{ critical_pos: 2, parent: ROOT, left:     2 , right: o_c(0)});
         // Bogus node
-        v_pu_b<I>(&mut cb.i, I{c: 0, p:    0, l:     0 , r:     0 });
-        v_pu_b<I>(&mut cb.i, I{c: 1, p:    0, l: o_c(1), r: o_c(2)});
-        v_pu_b<O<u8>>(&mut cb.o, O{k: u(b"100"), v, p: 0});
-        v_pu_b<O<u8>>(&mut cb.o, O{k: u(b"001"), v, p: 2});
-        v_pu_b<O<u8>>(&mut cb.o, O{k: u(b"011"), v, p: 2});
+        Vector::push_back<InnerNode>(&mut tree.inner_nodes, InnerNode{ critical_pos: 0, parent:    0, left:     0 , right:     0 });
+        Vector::push_back<InnerNode>(&mut tree.inner_nodes, InnerNode{ critical_pos: 1, parent:    0, left: o_c(1), right: o_c(2)});
+        Vector::push_back<OuterNode<u8>>(&mut tree.outer_nodes, OuterNode{ key: u(b"100"), value: v, parent: 0});
+        Vector::push_back<OuterNode<u8>>(&mut tree.outer_nodes, OuterNode{ key: u(b"001"), value: v, parent: 2});
+        Vector::push_back<OuterNode<u8>>(&mut tree.outer_nodes, OuterNode{ key: u(b"011"), value: v, parent: 2});
         // Swap remove and unpack bogus node
-        let I{c: _, p: _, l: _, r: _} = v_s_r<I>(&mut cb.i, 1);
+        let InnerNode{ critical_pos: _, parent: _, left: _, right: _} = Vector::swap_remove<InnerNode>(&mut tree.inner_nodes, 1);
         // Stitch broken relationships
-        stitch_swap_remove(&mut cb, 1, 3);
+        stitch_swap_remove(&mut tree, 1, 3);
         // Assert parent to relocated node indicates proper child update
-        assert!(v_b<I>(&cb.i, 0).l == 1, 0);
+        assert!(Vector::borrow<InnerNode>(&tree.inner_nodes, 0).left == 1, 0);
         // Assert children to relocated node indicate proper parent
         // update
-        assert!(v_b<O<u8>>(&cb.o, 1).p == 1, 1); // Left child
-        assert!(v_b<O<u8>>(&cb.o, 2).p == 1, 2); // Right child
-        cb // Return rather than unpack
+        assert!(Vector::borrow<OuterNode<u8>>(&tree.outer_nodes, 1).parent == 1, 1); // Left child
+        assert!(Vector::borrow<OuterNode<u8>>(&tree.outer_nodes, 2).parent == 1, 2); // Right child
+        tree // Return rather than unpack
     }
 
     #[test]
@@ -2533,29 +2519,29 @@ module Econia::CritBit {
     /// >     o_i = 1 -> 101   111 <- o_i = 2
     /// ```
     fun stitch_swap_remove_i_r():
-    CB<u8> {
+    CribitTree<u8> {
         let v = 0; // Ignore values in key-value pairs by setting to 0
-        let cb = empty<u8>(); // Initialize empty tree
+        let tree = empty<u8>(); // Initialize empty tree
         // Append nodes per above tree, including bogus inner node at
         // vector index 1, which will be swap removed
-        v_pu_b<I>(&mut cb.i, I{c: 2, p: ROOT, l: o_c(0), r:     2 });
+        Vector::push_back<InnerNode>(&mut tree.inner_nodes, InnerNode{ critical_pos: 2, parent: ROOT, left: o_c(0), right:     2 });
         // Bogus node
-        v_pu_b<I>(&mut cb.i, I{c: 0, p:    0, l:     0 , r:     0 });
-        v_pu_b<I>(&mut cb.i, I{c: 1, p:    0, l: o_c(1), r: o_c(2)});
-        v_pu_b<O<u8>>(&mut cb.o, O{k: u(b"001"), v, p: 0});
-        v_pu_b<O<u8>>(&mut cb.o, O{k: u(b"101"), v, p: 2});
-        v_pu_b<O<u8>>(&mut cb.o, O{k: u(b"111"), v, p: 2});
+        Vector::push_back<InnerNode>(&mut tree.inner_nodes, InnerNode{ critical_pos: 0, parent:    0, left:     0 , right:     0 });
+        Vector::push_back<InnerNode>(&mut tree.inner_nodes, InnerNode{ critical_pos: 1, parent:    0, left: o_c(1), right: o_c(2)});
+        Vector::push_back<OuterNode<u8>>(&mut tree.outer_nodes, OuterNode{ key: u(b"001"), value: v, parent: 0});
+        Vector::push_back<OuterNode<u8>>(&mut tree.outer_nodes, OuterNode{ key: u(b"101"), value: v, parent: 2});
+        Vector::push_back<OuterNode<u8>>(&mut tree.outer_nodes, OuterNode{ key: u(b"111"), value: v, parent: 2});
         // Swap remove and unpack bogus node
-        let I{c: _, p: _, l: _, r: _} = v_s_r<I>(&mut cb.i, 1);
+        let InnerNode{ critical_pos: _, parent: _, left: _, right: _} = Vector::swap_remove<InnerNode>(&mut tree.inner_nodes, 1);
         // Stitch broken relationships
-        stitch_swap_remove(&mut cb, 1, 3);
+        stitch_swap_remove(&mut tree, 1, 3);
         // Assert parent to relocated node indicates proper child update
-        assert!(v_b<I>(&cb.i, 0).r == 1, 0);
+        assert!(Vector::borrow<InnerNode>(&tree.inner_nodes, 0).right == 1, 0);
         // Assert children to relocated node indicate proper parent
         // update
-        assert!(v_b<O<u8>>(&cb.o, 1).p == 1, 1); // Left child
-        assert!(v_b<O<u8>>(&cb.o, 2).p == 1, 2); // Right child
-        cb // Return rather than unpack
+        assert!(Vector::borrow<OuterNode<u8>>(&tree.outer_nodes, 1).parent == 1, 1); // Left child
+        assert!(Vector::borrow<OuterNode<u8>>(&tree.outer_nodes, 2).parent == 1, 2); // Right child
+        tree // Return rather than unpack
     }
 
     #[test]
@@ -2569,24 +2555,24 @@ module Econia::CritBit {
     /// >   (relocated) o_i = 3 -> 101   111 <- o_i = 1
     /// ```
     fun stitch_swap_remove_o_l():
-    CB<u8> {
+    CribitTree<u8> {
         let v = 0; // Ignore values in key-value pairs by setting to 0
-        let cb = empty<u8>(); // Initialize empty tree
+        let tree = empty<u8>(); // Initialize empty tree
         // Append nodes per above tree, including bogus outer node at
         // vector index 2, which will be swap removed
-        v_pu_b<I>(&mut cb.i, I{c: 2, p: ROOT, l: o_c(0), r:     1 });
-        v_pu_b<I>(&mut cb.i, I{c: 1, p:    0, l: o_c(3), r: o_c(1)});
-        v_pu_b<O<u8>>(&mut cb.o, O{k: u(b"001"), v, p: 0});
-        v_pu_b<O<u8>>(&mut cb.o, O{k: u(b"111"), v, p: 1});
-        v_pu_b<O<u8>>(&mut cb.o, O{k:    HI_128, v, p: HI_64}); // Bogus
-        v_pu_b<O<u8>>(&mut cb.o, O{k: u(b"101"), v, p: 1});
+        Vector::push_back<InnerNode>(&mut tree.inner_nodes, InnerNode{ critical_pos: 2, parent: ROOT, left: o_c(0), right:     1 });
+        Vector::push_back<InnerNode>(&mut tree.inner_nodes, InnerNode{ critical_pos: 1, parent:    0, left: o_c(3), right: o_c(1)});
+        Vector::push_back<OuterNode<u8>>(&mut tree.outer_nodes, OuterNode{ key: u(b"001"), value: v, parent: 0});
+        Vector::push_back<OuterNode<u8>>(&mut tree.outer_nodes, OuterNode{ key: u(b"111"), value: v, parent: 1});
+        Vector::push_back<OuterNode<u8>>(&mut tree.outer_nodes, OuterNode{ key:    HI_128, value: v, parent: HI_64}); // Bogus
+        Vector::push_back<OuterNode<u8>>(&mut tree.outer_nodes, OuterNode{ key: u(b"101"), value: v, parent: 1});
         // Swap remove and unpack bogus node
-        let O{k: _, v: _, p: _} = v_s_r<O<u8>>(&mut cb.o, 2);
+        let OuterNode{ key: _, value: _, parent: _} = Vector::swap_remove<OuterNode<u8>>(&mut tree.outer_nodes, 2);
         // Stitch broken relationship
-        stitch_swap_remove(&mut cb, o_c(2), 4);
+        stitch_swap_remove(&mut tree, o_c(2), 4);
         // Assert parent to relocated node indicates proper child update
-        assert!(v_b<I>(&cb.i, 1).l == o_c(2), 0);
-        cb // Return rather than unpack
+        assert!(Vector::borrow<InnerNode>(&tree.inner_nodes, 1).left == o_c(2), 0);
+        tree // Return rather than unpack
     }
 
     #[test]
@@ -2600,24 +2586,24 @@ module Econia::CritBit {
     /// >     o_i = 1 -> 101   111 <- o_i = 3 (relocated)
     /// ```
     fun stitch_swap_remove_o_r():
-    CB<u8> {
+    CribitTree<u8> {
         let v = 0; // Ignore values in key-value pairs by setting to 0
-        let cb = empty<u8>(); // Initialize empty tree
+        let tree = empty<u8>(); // Initialize empty tree
         // Append nodes per above tree, including bogus outer node at
         // vector index 2, which will be swap removed
-        v_pu_b<I>(&mut cb.i, I{c: 2, p: ROOT, l: o_c(0), r:     1 });
-        v_pu_b<I>(&mut cb.i, I{c: 1, p:    0, l: o_c(1), r: o_c(3)});
-        v_pu_b<O<u8>>(&mut cb.o, O{k: u(b"001"), v, p: 0});
-        v_pu_b<O<u8>>(&mut cb.o, O{k: u(b"101"), v, p: 1});
-        v_pu_b<O<u8>>(&mut cb.o, O{k:    HI_128, v, p: HI_64}); // Bogus
-        v_pu_b<O<u8>>(&mut cb.o, O{k: u(b"111"), v, p: 1});
+        Vector::push_back<InnerNode>(&mut tree.inner_nodes, InnerNode{ critical_pos: 2, parent: ROOT, left: o_c(0), right:     1 });
+        Vector::push_back<InnerNode>(&mut tree.inner_nodes, InnerNode{ critical_pos: 1, parent:    0, left: o_c(1), right: o_c(3)});
+        Vector::push_back<OuterNode<u8>>(&mut tree.outer_nodes, OuterNode{ key: u(b"001"), value: v, parent: 0});
+        Vector::push_back<OuterNode<u8>>(&mut tree.outer_nodes, OuterNode{ key: u(b"101"), value: v, parent: 1});
+        Vector::push_back<OuterNode<u8>>(&mut tree.outer_nodes, OuterNode{ key:    HI_128, value: v, parent: HI_64}); // Bogus
+        Vector::push_back<OuterNode<u8>>(&mut tree.outer_nodes, OuterNode{ key: u(b"111"), value: v, parent: 1});
         // Swap remove and unpack bogus node
-        let O{k: _, v: _, p: _} = v_s_r<O<u8>>(&mut cb.o, 2);
+        let OuterNode{ key: _, value: _, parent: _} = Vector::swap_remove<OuterNode<u8>>(&mut tree.outer_nodes, 2);
         // Stitch broken relationship
-        stitch_swap_remove(&mut cb, o_c(2), 4);
+        stitch_swap_remove(&mut tree, o_c(2), 4);
         // Assert parent to relocated node indicates proper child update
-        assert!(v_b<I>(&cb.i, 1).r == o_c(2), 0);
-        cb // Return rather than unpack
+        assert!(Vector::borrow<InnerNode>(&tree.inner_nodes, 1).right == o_c(2), 0);
+        tree // Return rather than unpack
     }
 
     #[test]
@@ -2631,29 +2617,29 @@ module Econia::CritBit {
     /// >     o_i = 1 -> 101   111 <- o_i = 2
     /// ```
     fun stitch_swap_remove_r_i():
-    CB<u8> {
+    CribitTree<u8> {
         let v = 0; // Ignore values in key-value pairs by setting to 0
-        let cb = empty<u8>(); // Initialize empty tree
+        let tree = empty<u8>(); // Initialize empty tree
         // Append nodes per above tree, including bogus inner node at
         // vector index 1, which will be swap removed
-        v_pu_b<I>(&mut cb.i, I{c: 1, p:    2, l: o_c(1), r: o_c(2)});
+        Vector::push_back<InnerNode>(&mut tree.inner_nodes, InnerNode{ critical_pos: 1, parent:    2, left: o_c(1), right: o_c(2)});
         // Bogus node
-        v_pu_b<I>(&mut cb.i, I{c: 0, p:    0, l:     0 , r:     0 });
-        v_pu_b<I>(&mut cb.i, I{c: 2, p: ROOT, l: o_c(0), r:     0 });
-        v_pu_b<O<u8>>(&mut cb.o, O{k: u(b"001"), v, p: 0});
-        v_pu_b<O<u8>>(&mut cb.o, O{k: u(b"101"), v, p: 2});
-        v_pu_b<O<u8>>(&mut cb.o, O{k: u(b"111"), v, p: 2});
+        Vector::push_back<InnerNode>(&mut tree.inner_nodes, InnerNode{ critical_pos: 0, parent:    0, left:     0 , right:     0 });
+        Vector::push_back<InnerNode>(&mut tree.inner_nodes, InnerNode{ critical_pos: 2, parent: ROOT, left: o_c(0), right:     0 });
+        Vector::push_back<OuterNode<u8>>(&mut tree.outer_nodes, OuterNode{ key: u(b"001"), value: v, parent: 0});
+        Vector::push_back<OuterNode<u8>>(&mut tree.outer_nodes, OuterNode{ key: u(b"101"), value: v, parent: 2});
+        Vector::push_back<OuterNode<u8>>(&mut tree.outer_nodes, OuterNode{ key: u(b"111"), value: v, parent: 2});
         // Swap remove and unpack bogus node
-        let I{c: _, p: _, l: _, r: _} = v_s_r<I>(&mut cb.i, 1);
+        let InnerNode{ critical_pos: _, parent: _, left: _, right: _} = Vector::swap_remove<InnerNode>(&mut tree.inner_nodes, 1);
         // Stitch broken relationships
-        stitch_swap_remove(&mut cb, 1, 3);
+        stitch_swap_remove(&mut tree, 1, 3);
         // Assert root field reflects relocated node position
-        assert!(cb.r == 1, 0);
+        assert!(tree.root == 1, 0);
         // Assert children to relocated node indicate proper parent
         // update
-        assert!(v_b<O<u8>>(&cb.o, 0).p == 1, 1); // Left child
-        assert!(v_b<I>(&cb.i, 0).p == 1, 2); // Right child
-        cb // Return rather than unpack
+        assert!(Vector::borrow<OuterNode<u8>>(&tree.outer_nodes, 0).parent == 1, 1); // Left child
+        assert!(Vector::borrow<InnerNode>(&tree.inner_nodes, 0).parent == 1, 2); // Right child
+        tree // Return rather than unpack
     }
 
     #[test]
@@ -2662,124 +2648,124 @@ module Econia::CritBit {
     /// >      100 <- i_i = 1 (relocated)
     /// ```
     fun stitch_swap_remove_r_o():
-    CB<u8> {
+    CribitTree<u8> {
         let v = 0; // Ignore values in key-value pairs by setting to 0
-        let cb = empty<u8>(); // Initialize empty tree
+        let tree = empty<u8>(); // Initialize empty tree
         // Append root outer node per above diagram, including bogus
         // outer node at vector index 0, which will be swap removed
-        v_pu_b<O<u8>>(&mut cb.o, O{k:    HI_128, v, p: HI_64}); // Bogus
-        v_pu_b<O<u8>>(&mut cb.o, O{k: u(b"100"), v, p:  ROOT});
+        Vector::push_back<OuterNode<u8>>(&mut tree.outer_nodes, OuterNode{ key:    HI_128, value: v, parent: HI_64}); // Bogus
+        Vector::push_back<OuterNode<u8>>(&mut tree.outer_nodes, OuterNode{ key: u(b"100"), value: v, parent:  ROOT});
         // Swap remove and unpack bogus node
-        let O{k: _, v: _, p: _} = v_s_r<O<u8>>(&mut cb.o, 0);
+        let OuterNode{ key: _, value: _, parent: _} = Vector::swap_remove<OuterNode<u8>>(&mut tree.outer_nodes, 0);
         // Stitch broken relationships
-        stitch_swap_remove(&mut cb, o_c(0), 2);
+        stitch_swap_remove(&mut tree, o_c(0), 2);
         // Assert root field indicates relocated outer node
-        assert!(cb.r == o_c(0), 0);
+        assert!(tree.root == o_c(0), 0);
         // Borrow reference to outer node at root
-        let n = v_b<O<u8>>(&cb.o, 0);
+        let n = Vector::borrow<OuterNode<u8>>(&tree.outer_nodes, 0);
         // Assert fields are as expected
-        assert!(n.k == u(b"100") && n.v == 0 && n.p == ROOT, 1);
-        cb // Return rather than unpack
+        assert!(n.key == u(b"100") && n.value == 0 && n.parent == ROOT, 1);
+        tree // Return rather than unpack
     }
 
     #[test]
     /// See [walkthrough](#Walkthrough)
     fun traverse_demo() {
-        let cb = empty(); // Initialize empty tree
+        let tree = empty(); // Initialize empty tree
         // Insert {n, 100 * n} for 0 < n < 10, out of order
-        insert(&mut cb, 9, 900);
-        insert(&mut cb, 6, 600);
-        insert(&mut cb, 3, 300);
-        insert(&mut cb, 1, 100);
-        insert(&mut cb, 8, 800);
-        insert(&mut cb, 2, 200);
-        insert(&mut cb, 7, 700);
-        insert(&mut cb, 5, 500);
-        insert(&mut cb, 4, 400);
-        assert!(!is_empty(&cb), 0); // Assert tree not empty
-        let n = length(&cb); // Get number of keys in the tree
+        insert(&mut tree, 9, 900);
+        insert(&mut tree, 6, 600);
+        insert(&mut tree, 3, 300);
+        insert(&mut tree, 1, 100);
+        insert(&mut tree, 8, 800);
+        insert(&mut tree, 2, 200);
+        insert(&mut tree, 7, 700);
+        insert(&mut tree, 5, 500);
+        insert(&mut tree, 4, 400);
+        assert!(!is_empty(&tree), 0); // Assert tree not empty
+        let n = length(&tree); // Get number of keys in the tree
         let r = n - 1; // Get number of remaining traversals possible
         // Initialize predecessor traversal: get max key in tree,
         // mutable reference to corresponding value, parent field of
         // corresponding node, and the child field index of it
-        let (k, v_r, p_f, c_i) = traverse_p_init_mut(&mut cb);
+        let (k, v_r, p_f, c_i) = traverse_p_init_mut(&mut tree);
         let i = 10; // Initialize value increment counter
         while(r > 0) { // While remaining traversals possible
             if (k % 4 == 0) { // If key is a multiple of 4
                 // Traverse pop corresponding node and discard its value
                 (k, v_r, p_f, c_i, _) =
-                    traverse_p_pop_mut(&mut cb, k, p_f, c_i, n);
+                    traverse_p_pop_mut(&mut tree, k, p_f, c_i, n);
                 n = n - 1; // Decrement key count
             } else { // If key is not a multiple of 4
                 *v_r = *v_r + i; // Increment corresponding value
                 i = i + 10; // Increment by 10 more next iteration
                 // Traverse to predecessor
-                (k, v_r, p_f, c_i) = traverse_p_mut(&mut cb, k, p_f);
+                (k, v_r, p_f, c_i) = traverse_p_mut(&mut tree, k, p_f);
             };
             r = r - 1; // Decrement remaining traversal count
         }; // Traversal has ended up at node having minimum key
         *v_r = 0; // Set corresponding value to 0
         // Assert keys popped correctly
-        assert!(!has_key(&cb, 4) && !has_key(&cb, 8), 1);
+        assert!(!has_key(&tree, 4) && !has_key(&tree, 8), 1);
         // Assert correct value updates
-        assert!(*borrow(&cb, 1) ==   0, 2);
-        assert!(*borrow(&cb, 2) == 260, 3);
-        assert!(*borrow(&cb, 3) == 350, 4);
-        assert!(*borrow(&cb, 5) == 540, 5);
-        assert!(*borrow(&cb, 6) == 630, 6);
-        assert!(*borrow(&cb, 7) == 720, 7);
-        assert!(*borrow(&cb, 9) == 910, 8);
+        assert!(*borrow(&tree, 1) ==   0, 2);
+        assert!(*borrow(&tree, 2) == 260, 3);
+        assert!(*borrow(&tree, 3) == 350, 4);
+        assert!(*borrow(&tree, 5) == 540, 5);
+        assert!(*borrow(&tree, 6) == 630, 6);
+        assert!(*borrow(&tree, 7) == 720, 7);
+        assert!(*borrow(&tree, 9) == 910, 8);
         assert!(n > 0, 9); // Assert tree still not empty
         // Re-initialize counters: remaining traversal, value increment
         (r, i) = (n - 1, 1);
         // Initialize successor traversal
-        (k, v_r, p_f, c_i) = traverse_s_init_mut(&mut cb);
+        (k, v_r, p_f, c_i) = traverse_s_init_mut(&mut tree);
         let v = 0; // Initialize variable to store value of matched node
         while(r > 0) { // While remaining traversals possible
             if (k == 7) { // If key is 7
                 // Traverse pop corresponding node and store its value
-                (_, _, _, _, v) = traverse_s_pop_mut(&mut cb, k, p_f, c_i, n);
+                (_, _, _, _, v) = traverse_s_pop_mut(&mut tree, k, p_f, c_i, n);
                 break // Stop traversal
             } else { // For all keys not equal to 7
                 *v_r = *v_r + i; // Increment corresponding value
                 // Traverse to successor
-                (k, v_r, p_f, c_i) = traverse_s_mut(&mut cb, k, p_f);
+                (k, v_r, p_f, c_i) = traverse_s_mut(&mut tree, k, p_f);
                 i = i + 1; // Increment by 1 more next iteration
             };
             r = r - 1; // Decrement remaining traversal count
         };
         // Assert key popped correctly
-        assert!(!has_key(&cb, 7), 10);
+        assert!(!has_key(&tree, 7), 10);
         // Assert value of popped node stored correctly
         assert!(v == 720, 11);
         // Assert values updated correctly
-        assert!(*borrow(&cb, 1) ==   1, 12);
-        assert!(*borrow(&cb, 2) == 262, 13);
-        assert!(*borrow(&cb, 3) == 353, 14);
-        assert!(*borrow(&cb, 5) == 544, 15);
-        assert!(*borrow(&cb, 6) == 635, 16);
-        assert!(*borrow(&cb, 9) == 910, 17);
+        assert!(*borrow(&tree, 1) ==   1, 12);
+        assert!(*borrow(&tree, 2) == 262, 13);
+        assert!(*borrow(&tree, 3) == 353, 14);
+        assert!(*borrow(&tree, 5) == 544, 15);
+        assert!(*borrow(&tree, 6) == 635, 16);
+        assert!(*borrow(&tree, 9) == 910, 17);
         // Pop all key-value pairs except {9, 910}
-        _ = pop(&mut cb, 1);
-        _ = pop(&mut cb, 2);
-        _ = pop(&mut cb, 3);
-        _ = pop(&mut cb, 5);
-        _ = pop(&mut cb, 6);
-        assert!(!is_empty(&cb), 18); // Assert tree not empty
-        let n = length(&cb); // Get number of keys in the tree
+        _ = pop(&mut tree, 1);
+        _ = pop(&mut tree, 2);
+        _ = pop(&mut tree, 3);
+        _ = pop(&mut tree, 5);
+        _ = pop(&mut tree, 6);
+        assert!(!is_empty(&tree), 18); // Assert tree not empty
+        let n = length(&tree); // Get number of keys in the tree
         let r = n - 1; // Get number of remaining traversals possible
         // Initialize successor traversal
-        (k, v_r, p_f, _) = traverse_s_init_mut(&mut cb);
+        (k, v_r, p_f, _) = traverse_s_init_mut(&mut tree);
         *v_r = 1234; // Update value of node having minimum key
         while(r > 0) { // While remaining traversals possible
             *v_r = 4321; // Update value of corresponding node
             // Traverse to successor
-            (k, v_r, p_f, _) = traverse_s_mut(&mut cb, k, p_f);
+            (k, v_r, p_f, _) = traverse_s_mut(&mut tree, k, p_f);
             r = r - 1; // Decrement remaining traversal count
         }; // This loop does not go through any iterations
         // Assert value unchanged via loop
-        assert!(pop(&mut cb, 9) == 1234, 19);
-        destroy_empty(cb); // Destroy empty tree
+        assert!(pop(&mut tree, 9) == 1234, 19);
+        destroy_empty(tree); // Destroy empty tree
     }
 
     #[test]
@@ -2833,66 +2819,66 @@ module Econia::CritBit {
     /// >                      ------->
     /// ```
     fun traverse_end_pop_success() {
-        let cb = empty(); // Initialize empty tree
+        let tree = empty(); // Initialize empty tree
         // Insert various key-value pairs per above tree
-        insert(&mut cb, u(b"1101"), 10);
-        insert(&mut cb, u(b"1000"), 11);
-        insert(&mut cb, u(b"1100"), 12);
-        insert(&mut cb, u(b"1110"), 13);
-        insert(&mut cb, u(b"0000"), 14);
+        insert(&mut tree, u(b"1101"), 10);
+        insert(&mut tree, u(b"1000"), 11);
+        insert(&mut tree, u(b"1100"), 12);
+        insert(&mut tree, u(b"1110"), 13);
+        insert(&mut tree, u(b"0000"), 14);
         // Initialize predecessor traversal (at 1110)
-        let (k, _, p_f, _) = traverse_p_init_mut(&mut cb);
+        let (k, _, p_f, _) = traverse_p_init_mut(&mut tree);
         // Traverse to predecessor (to 1101)
-        let (_, _, p_f, c_i) = traverse_p_mut(&mut cb, k, p_f);
+        let (_, _, p_f, c_i) = traverse_p_mut(&mut tree, k, p_f);
         // End the traversal by popping 1101, assert value of 10
-        assert!(traverse_end_pop(&mut cb, p_f, c_i, 5) == 10, 0);
+        assert!(traverse_end_pop(&mut tree, p_f, c_i, 5) == 10, 0);
         // Initialize successor traversal (at 0000)
-        let (k, v_r, p_f, _) = traverse_s_init_mut(&mut cb);
+        let (k, v_r, p_f, _) = traverse_s_init_mut(&mut tree);
         // Assert key-value pair
         assert!(k == u(b"0000") && *v_r == 14, 1);
         // Traverse entire tree, assert key-value pairs along the way
-        (k, v_r, p_f, _) = traverse_s_mut(&mut cb, k, p_f);
+        (k, v_r, p_f, _) = traverse_s_mut(&mut tree, k, p_f);
         assert!(k == u(b"1000") && *v_r == 11, 2);
-        (k, v_r, p_f, _) = traverse_s_mut(&mut cb, k, p_f);
+        (k, v_r, p_f, _) = traverse_s_mut(&mut tree, k, p_f);
         assert!(k == u(b"1100") && *v_r == 12, 3);
-        (k, v_r, _, _) = traverse_s_mut(&mut cb, k, p_f);
+        (k, v_r, _, _) = traverse_s_mut(&mut tree, k, p_f);
         assert!(k == u(b"1110") && *v_r == 13, 4);
         // Initialize successor traversal (at 0000)
-        (k, _, p_f, _) = traverse_s_init_mut(&mut cb);
+        (k, _, p_f, _) = traverse_s_init_mut(&mut tree);
         // Traverse to successor (to 1000)
-        (_, _, p_f, c_i) = traverse_s_mut(&mut cb, k, p_f);
+        (_, _, p_f, c_i) = traverse_s_mut(&mut tree, k, p_f);
         // End the traversal by popping 1000, assert value of 11
-        assert!(traverse_end_pop(&mut cb, p_f, c_i, 4) == 11, 5);
+        assert!(traverse_end_pop(&mut tree, p_f, c_i, 4) == 11, 5);
         // Initialize predecessor traversal (at 1110)
-        (k, v_r, p_f, _) = traverse_p_init_mut(&mut cb);
+        (k, v_r, p_f, _) = traverse_p_init_mut(&mut tree);
         // Assert key-value pair
         assert!(k == u(b"1110") && *v_r == 13, 6);
         // Traverse entire tree, assert key-value pairs along the way
-        (k, v_r, p_f, _) = traverse_p_mut(&mut cb, k, p_f);
+        (k, v_r, p_f, _) = traverse_p_mut(&mut tree, k, p_f);
         assert!(k == u(b"1100") && *v_r == 12, 7);
-        (k, v_r, _, _) = traverse_p_mut(&mut cb, k, p_f);
+        (k, v_r, _, _) = traverse_p_mut(&mut tree, k, p_f);
         assert!(k == u(b"0000") && *v_r == 14, 8);
         // Initialize predecessor traversal (at 1110)
-        (_, _, p_f, c_i) = traverse_p_init_mut(&mut cb);
+        (_, _, p_f, c_i) = traverse_p_init_mut(&mut tree);
         // End the traversal by popping 1110, assert value of 13
-        assert!(traverse_end_pop(&mut cb, p_f, c_i, 3) == 13, 9);
+        assert!(traverse_end_pop(&mut tree, p_f, c_i, 3) == 13, 9);
         // Initialize successor traversal (at 0000)
-        (k, v_r, p_f, _) = traverse_s_init_mut(&mut cb);
+        (k, v_r, p_f, _) = traverse_s_init_mut(&mut tree);
         // Assert key-value pair
         assert!(k == u(b"0000") && *v_r == 14, 10);
         // Traverse entire tree, assert key-value pairs along the way
-        (k, v_r, _, _) = traverse_s_mut(&mut cb, k, p_f);
+        (k, v_r, _, _) = traverse_s_mut(&mut tree, k, p_f);
         assert!(k == u(b"1100") && *v_r == 12, 11);
         // Initialize successor traversal (at 0000)
-        (_, _, p_f, c_i) = traverse_s_init_mut(&mut cb);
+        (_, _, p_f, c_i) = traverse_s_init_mut(&mut tree);
         // End the traversal by popping 0000, assert value of 14
-        assert!(traverse_end_pop(&mut cb, p_f, c_i, 2) == 14, 12);
+        assert!(traverse_end_pop(&mut tree, p_f, c_i, 2) == 14, 12);
         // Initialize predecessor traversal (at 1100)
-        (_, _, p_f, c_i) = traverse_p_init_mut(&mut cb);
+        (_, _, p_f, c_i) = traverse_p_init_mut(&mut tree);
         // End the traversal by popping 1100, assert value of 12
-        assert!(traverse_end_pop(&mut cb, p_f, c_i, 1) == 12, 13);
-        assert!(cb.r == 0, 14); // Assert root updates
-        destroy_empty(cb); // Destroy empty tree
+        assert!(traverse_end_pop(&mut tree, p_f, c_i, 1) == 12, 13);
+        assert!(tree.root == 0, 14); // Assert root updates
+        destroy_empty(tree); // Destroy empty tree
     }
 
     #[test]
@@ -2943,58 +2929,58 @@ module Econia::CritBit {
     /// >                      1101 <- o_i = 0
     /// ```
     fun traverse_pop_success():
-    CB<u8> {
-        let cb = empty(); // Initialize empty tree
+    CribitTree<u8> {
+        let tree = empty(); // Initialize empty tree
         // Insert various key-value pairs per above tree
-        insert(&mut cb, u(b"1101"), 10);
-        insert(&mut cb, u(b"1000"), 11);
-        insert(&mut cb, u(b"1100"), 12);
-        insert(&mut cb, u(b"1110"), 13);
-        insert(&mut cb, u(b"0000"), 14);
+        insert(&mut tree, u(b"1101"), 10);
+        insert(&mut tree, u(b"1000"), 11);
+        insert(&mut tree, u(b"1100"), 12);
+        insert(&mut tree, u(b"1110"), 13);
+        insert(&mut tree, u(b"0000"), 14);
         // Initialize predecessor traversal (at 1101)
-        let (k, v_r, p_f, i) = traverse_p_init_mut(&mut cb);
+        let (k, v_r, p_f, i) = traverse_p_init_mut(&mut tree);
         // Assert correct predecessor traversal initialization returns
         assert!(k == u(b"1110") && *v_r == 13 && p_f == 2 && i == o_c(3), 0);
         *v_r = 15; // Mutate value of node having key 1110
         // Traverse to predecessor (to 1101)
-        (k, v_r, p_f, i) = traverse_p_mut(&mut cb, k, p_f);
+        (k, v_r, p_f, i) = traverse_p_mut(&mut tree, k, p_f);
         // Assert correct predecessor traversal returns
         assert!(k == u(b"1101") && *v_r == 10 && p_f == 1 && i == o_c(0), 1);
         *v_r = 16; // Mutate value of node having key 1101
         // Traverse back to successor (to 1110)
-        (k, v_r, p_f, i) = traverse_s_mut(&mut cb, k, p_f);
+        (k, v_r, p_f, i) = traverse_s_mut(&mut tree, k, p_f);
         // Assert correct successor traversal returns, including mutated
         // value
         assert!(k == u(b"1110") && *v_r == 15 && p_f == 2 && i == o_c(3), 2);
         // Traverse pop back to predecessor (to 1101)
-        let (k, v_r, p_f, i, v) = traverse_p_pop_mut(&mut cb, k, p_f, i, 5);
+        let (k, v_r, p_f, i, v) = traverse_p_pop_mut(&mut tree, k, p_f, i, 5);
         assert!(v == 15, 3); // Assert value popped correctly
         // Assert correct predecessor traversal returns, including
         // mutated value
         assert!(k == u(b"1101") && *v_r == 16 && p_f == 1 && i == o_c(0), 4);
         // Initialize successor traversal (at 0000)
-        (k, v_r, p_f, i) = traverse_s_init_mut(&mut cb);
+        (k, v_r, p_f, i) = traverse_s_init_mut(&mut tree);
         // Assert correct successor traversal initialization returns
         assert!(k == u(b"0000") && *v_r == 14 && p_f == 2 && i == o_c(3), 5);
         // Traverse pop to successor (to 1000)
-        (k, v_r, p_f, i, v) = traverse_s_pop_mut(&mut cb, k, p_f, i, 4);
+        (k, v_r, p_f, i, v) = traverse_s_pop_mut(&mut tree, k, p_f, i, 4);
         assert!(v == 14, 6); // Assert value popped correctly
         // Assert correct predecessor traversal returns
         assert!(k == u(b"1000") && *v_r == 11 && p_f == 0 && i == o_c(1), 7);
         // Traverse pop to successor (to 1100)
-        (k, v_r, p_f, i, v) = traverse_s_pop_mut(&mut cb, k, p_f, i, 3);
+        (k, v_r, p_f, i, v) = traverse_s_pop_mut(&mut tree, k, p_f, i, 3);
         assert!(v == 11, 8); // Assert value popped correctly
         // Assert correct predecessor traversal returns
         assert!(k == u(b"1100") && *v_r == 12 && p_f == 0 && i == o_c(1), 9);
         // Traverse pop to successor (to 1101)
-        (k, v_r, p_f, i, v) = traverse_s_pop_mut(&mut cb, k, p_f, i, 2);
+        (k, v_r, p_f, i, v) = traverse_s_pop_mut(&mut tree, k, p_f, i, 2);
         assert!(v == 12, 10); // Assert value popped correctly
         // Assert correct successor traversal returns, including
         // mutation from beginning of test
         assert!(k == u(b"1101") && *v_r == 16 && i == o_c(0), 11);
         // Assert root relationship updated correctly
-        assert!(cb.r == o_c(0) && p_f == ROOT, 12);
-        cb // Return rather than unpack
+        assert!(tree.root == o_c(0) && p_f == ROOT, 12);
+        tree // Return rather than unpack
     }
 
     #[test]

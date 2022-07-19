@@ -183,12 +183,7 @@ module Econia::Registry {
         is_coin_initialized as c_i_c_i
     };
 
-    use AptosFramework::IterableTable::{
-        add as t_a,
-        contains as t_c,
-        new as t_n,
-        IterableTable as T
-    };
+    use AptosFramework::IterableTable;
 
     use AptosFramework::TypeInfo::{
         account_address as ti_a_a,
@@ -199,7 +194,7 @@ module Econia::Registry {
     };
 
     use Econia::Book::{
-        init_book as b_i_b
+        init_book
     };
 
     use Econia::Caps::{
@@ -223,16 +218,16 @@ module Econia::Registry {
 
     #[test_only]
     use AptosFramework::Coin::{
-        BurnCapability as CBC,
-        deposit as c_d,
-        initialize as c_i,
-        MintCapability as CMC,
-        mint as c_m
+        BurnCapability,
+        deposit as c_deposit,
+        initialize as c_initialize,
+        MintCapability,
+        mint as c_mint
     };
 
     #[test_only]
     use AptosFramework::IterableTable::{
-        borrow as t_b,
+        borrow as t_borrow,
     };
 
     #[test_only]
@@ -247,7 +242,7 @@ module Econia::Registry {
 
     #[test_only]
     use Std::ASCII::{
-        string as a_s
+        string
     };
 
     // Test-only uses <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
@@ -277,19 +272,19 @@ module Econia::Registry {
     struct E19{}
 
     /// Market info
-    struct MI has copy, drop, store {
+    struct MarketInfo has copy, drop, store {
         /// Base CoinType TypeInfo
-        b: TI,
+        base: TI,
         /// Quote CoinType TypeInfo
-        q: TI,
+        quote: TI,
         /// Scale exponent TypeInfo
-        e: TI
+        exponent: TI
     }
 
     /// Market registry
-    struct MR has key {
+    struct MarketRegistry has key {
         /// Table from `MI` to address hosting the corresponding `MC`
-        t: T<MI, address>
+        table: IterableTable::IterableTable<MarketInfo, address>
     }
 
     // Structs <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
@@ -350,11 +345,11 @@ module Econia::Registry {
 
     #[test_only]
     /// Base coin capabilities
-    struct BCC has key {
+    struct BaseCoinCapability has key {
         /// Mint capability
-        m: CMC<BCT>,
+        m: MintCapability<BCT>,
         /// Burn capability
-        b: CBC<BCT>
+        b: BurnCapability<BCT>
     }
 
     #[test_only]
@@ -363,11 +358,11 @@ module Econia::Registry {
 
     #[test_only]
     /// Quote coin capabilities
-    struct QCC has key {
+    struct QuoteCoinCapability has key {
         /// Mint capability
-        m: CMC<QCT>,
+        m: MintCapability<QCT>,
         /// Burn capability
-        b: CBC<QCT>
+        b: BurnCapability<QCT>
     }
 
     #[test_only]
@@ -414,21 +409,21 @@ module Econia::Registry {
         let addr = address_of(account); // Get signer address
         assert!(addr == @Econia, E_NOT_ECONIA); // Assert Econia signer
         // Assert registry does not already exist
-        assert!(!exists<MR>(addr), E_REGISTRY_EXISTS);
+        assert!(!exists<MarketRegistry>(addr), E_REGISTRY_EXISTS);
         // Move empty market registry to account
-        move_to<MR>(account, MR{t: t_n<MI, address>()});
+        move_to<MarketRegistry>(account, MarketRegistry{ table: IterableTable::new<MarketInfo, address>()});
     }
 
     /// Return `true` if given market is registered
     public(friend) fun is_registered<B, Q, E>(
     ): bool
-    acquires MR {
+    acquires MarketRegistry {
         // Return false if no market registry at Econia account
-        if (!exists<MR>(@Econia)) return false;
+        if (!exists<MarketRegistry>(@Econia)) return false;
          // Get market info for given type arguments
-        let m_i = MI{b: ti_t_o<B>(), q: ti_t_o<Q>(), e: ti_t_o<E>()};
+        let m_i = MarketInfo{ base: ti_t_o<B>(), quote: ti_t_o<Q>(), exponent: ti_t_o<E>()};
         // Return if registry table contains market information
-        t_c(&borrow_global<MR>(@Econia).t, m_i)
+        IterableTable::contains(&borrow_global<MarketRegistry>(@Econia).table, m_i)
     }
 
     /// Return scale factor corresponding to scale exponent type `E`
@@ -473,20 +468,20 @@ module Econia::Registry {
     /// initialized or if market already registered
     public(script) fun register_market<B, Q, E>(
         host: &signer
-    ) acquires MR {
+    ) acquires MarketRegistry {
         verify_market_types<B, Q, E>(); // Verify valid type arguments
         // Assert market registry is initialized at Econia account
-        assert!(exists<MR>(@Econia), E_NO_REGISTRY);
+        assert!(exists<MarketRegistry>(@Econia), E_NO_REGISTRY);
         // Get market info for given type arguments
-        let m_i = MI{b: ti_t_o<B>(), q: ti_t_o<Q>(), e: ti_t_o<E>()};
+        let m_i = MarketInfo{ base: ti_t_o<B>(), quote: ti_t_o<Q>(), exponent: ti_t_o<E>()};
         // Borrow mutable reference to market registry table
-        let r_t = &mut borrow_global_mut<MR>(@Econia).t;
+        let r_t = &mut borrow_global_mut<MarketRegistry>(@Econia).table;
         // Assert requested market not already registered
-        assert!(!t_c(r_t, m_i), E_REGISTERED);
+        assert!(!IterableTable::contains(r_t, m_i), E_REGISTERED);
         // Initialize empty order book under host account
-        b_i_b<B, Q, E>(host, scale_factor<E>(), &book_f_c());
+        init_book<B, Q, E>(host, scale_factor<E>(), &book_f_c());
         // Register market-host relationship
-        t_a(r_t, m_i, address_of(host));
+        IterableTable::add(r_t, m_i, address_of(host));
     }
 
     // Public script functions <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
@@ -542,13 +537,13 @@ module Econia::Registry {
         // Assert initializing coin types under Econia account
         assert!(address_of(econia) == @Econia, 0);
         // Initialize base coin type, storing mint/burn capabilities
-        let(m, b) = c_i<BCT>(econia, a_s(BCT_CN), a_s(BCT_CS), BCT_D, false);
+        let(m, b) = c_initialize<BCT>(econia, string(BCT_CN), string(BCT_CS), BCT_D, false);
         // Save capabilities in global storage
-        move_to(econia, BCC{m, b});
+        move_to(econia, BaseCoinCapability{m, b});
         // Initialize quote coin type, storing mint/burn capabilities
-        let(m, b) = c_i<QCT>(econia, a_s(QCT_CN), a_s(QCT_CS), QCT_D, false);
+        let(m, b) = c_initialize<QCT>(econia, string(QCT_CN), string(QCT_CS), QCT_D, false);
         // Save capabilities in global storage
-        move_to(econia, QCC{m, b});
+        move_to(econia, QuoteCoinCapability{m, b});
     }
 
     #[test_only]
@@ -557,9 +552,9 @@ module Econia::Registry {
     public fun mint_bct_to(
         user: address,
         amount: u64
-    ) acquires BCC {
+    ) acquires BaseCoinCapability {
         // Mint and deposit to user
-        c_d<BCT>(user, c_m<BCT>(amount, &borrow_global<BCC>(@Econia).m));
+        c_deposit<BCT>(user, c_mint<BCT>(amount, &borrow_global<BaseCoinCapability>(@Econia).m));
     }
 
     #[test_only]
@@ -568,9 +563,9 @@ module Econia::Registry {
     public fun mint_qct_to(
         user: address,
         amount: u64
-    ) acquires QCC {
+    ) acquires QuoteCoinCapability {
         // Mint and deposit to user
-        c_d<QCT>(user, c_m<QCT>(amount, &borrow_global<QCC>(@Econia).m));
+        c_deposit<QCT>(user, c_mint<QCT>(amount, &borrow_global<QuoteCoinCapability>(@Econia).m));
     }
 
     #[test_only]
@@ -578,7 +573,7 @@ module Econia::Registry {
     /// assuming registry has already been initialized
     public(script) fun register_test_market(
         econia: &signer
-    ) acquires MR {
+    ) acquires MarketRegistry {
         init_coin_types(econia); // Initialize test coin types
         register_market<BCT, QCT, E0>(econia); // Register market
     }
@@ -589,7 +584,7 @@ module Econia::Registry {
     /// initialized
     public(script) fun register_scaled_test_market<E>(
         econia: &signer
-    ) acquires MR {
+    ) acquires MarketRegistry {
         init_coin_types(econia); // Initialize test coin types
         register_market<BCT, QCT, E>(econia); // Register market
     }
@@ -624,13 +619,13 @@ module Econia::Registry {
     ) {
         init_registry(econia); // Initialize registry
         // Assert exists at Econia account
-        assert!(exists<MR>(address_of(econia)), 0);
+        assert!(exists<MarketRegistry>(address_of(econia)), 0);
     }
 
     #[test]
     /// Verify false return for market registry not initialized
     fun is_registered_false_no_mr()
-    acquires MR {
+    acquires MarketRegistry {
         // Assert false return
         assert!(!is_registered<BCT, QCT, E0>(), 0);
     }
@@ -639,7 +634,7 @@ module Econia::Registry {
     /// Verify false return for no such market registered
     public(script) fun is_registered_false_not_registered(
         econia: &signer
-    ) acquires MR {
+    ) acquires MarketRegistry {
         init_registry(econia); // Initialize registry
         // Assert false return for unregistered market
         assert!(!is_registered<BCT, QCT, E0>(), 0);
@@ -649,7 +644,7 @@ module Econia::Registry {
     /// Verify true return for registered market
     public(script) fun is_registered_true(
         econia: &signer
-    ) acquires MR {
+    ) acquires MarketRegistry {
         c_i_c(econia); // Initialize friend-like capabilities
         init_registry(econia); // Initialize registry
         register_test_market(econia); // Register test market
@@ -661,11 +656,11 @@ module Econia::Registry {
     /// Pack market info and verify fields
     fun pack_market_info() {
         // Pack market info for test coin types
-        let m_i = MI{b: ti_t_o<BCT>(), q: ti_t_o<QCT>(), e: ti_t_o<E2>()};
-        verify_t_i(&m_i.b, &ti_t_o<BCT>(), 0); // Verify base coin type
-        verify_t_i(&m_i.q, &ti_t_o<QCT>(), 1); // Verify quote coin type
+        let m_i = MarketInfo{ base: ti_t_o<BCT>(), quote: ti_t_o<QCT>(), exponent: ti_t_o<E2>()};
+        verify_t_i(&m_i.base, &ti_t_o<BCT>(), 0); // Verify base coin type
+        verify_t_i(&m_i.quote, &ti_t_o<QCT>(), 1); // Verify quote coin type
         // Verify scale exponent type
-        verify_t_i(&m_i.e, &ti_t_o<E2>(), 2);
+        verify_t_i(&m_i.exponent, &ti_t_o<E2>(), 2);
     }
 
     #[test(
@@ -677,7 +672,7 @@ module Econia::Registry {
     public(script) fun register_market_failure_no_registry(
         econia: &signer,
         host: &signer
-    ) acquires MR {
+    ) acquires MarketRegistry {
         init_coin_types(econia); // Initialize coin types
         // Attempt invalid registration
         register_market<BCT, QCT, E0>(host);
@@ -692,7 +687,7 @@ module Econia::Registry {
     public(script) fun register_market_failure_registered(
         econia: &signer,
         host: &signer
-    ) acquires MR {
+    ) acquires MarketRegistry {
         init_coin_types(econia); // Initialize coin types
         c_i_c(econia); // Initialize friend-like capabilities
         init_registry(econia); // Initialize registry
@@ -709,7 +704,7 @@ module Econia::Registry {
     public(script) fun register_market_success(
         econia: &signer,
         host: &signer
-    ) acquires MR {
+    ) acquires MarketRegistry {
         init_coin_types(econia); // Initialize coin types
         init_registry(econia); // Initialize registry
         c_i_c(econia); // Initialize friend-like capabilities
@@ -718,11 +713,11 @@ module Econia::Registry {
         assert!(book_scale_factor<BCT, QCT, E4>(
             address_of(host), &book_f_c()) == scale_factor<E4>(), 0);
         // Borrow immutable reference to market registry
-        let r_t = &borrow_global<MR>(@Econia).t;
+        let r_t = &borrow_global<MarketRegistry>(@Econia).table;
         // Define market info struct to look up in table
-        let m_i = MI{b: ti_t_o<BCT>(), q: ti_t_o<QCT>(), e: ti_t_o<E4>()};
+        let m_i = MarketInfo{ base: ti_t_o<BCT>(), quote: ti_t_o<QCT>(), exponent: ti_t_o<E4>()};
         // Assert registry reflects market-host relationship
-        assert!(*t_b(r_t, m_i) == address_of(host), 2);
+        assert!(*t_borrow(r_t, m_i) == address_of(host), 2);
     }
 
     #[test]

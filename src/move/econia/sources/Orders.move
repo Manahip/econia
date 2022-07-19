@@ -38,7 +38,7 @@ module Econia::Orders {
 
     use Econia::CritBit::{
         borrow_mut,
-        CB,
+    CribitTree,
         empty as cb_e,
         has_key as cb_h_k,
         insert as cb_i,
@@ -73,9 +73,9 @@ module Econia::Orders {
         /// Scale factor
         f: u64,
         /// Asks
-        a: CB<u64>,
+        a: CribitTree<u64>,
         /// Bids
-        b: CB<u64>
+        b: CribitTree<u64>
     }
 
     // Structs <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
