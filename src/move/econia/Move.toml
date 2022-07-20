@@ -14,4 +14,4 @@ TestUser3 = '0x4567'
 [dependencies.AptosFramework]
 git = 'https://github.com/aptos-labs/aptos-core'
 subdir = 'aptos-move/framework/aptos-framework'
-rev = 'origin/devnet'
+rev = '45140fcf79c2afd3ce8c86bb9952e90632533cbb'
