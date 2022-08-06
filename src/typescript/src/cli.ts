@@ -43,7 +43,7 @@ export async function sendPayloadTx(
   const signedTxn = await client.signTransaction(account, txnRequest);
   const txnResult = await client.submitTransaction(signedTxn);
   await client.waitForTransaction(txnResult.hash);
-  const txDetails = (await client.getTransaction(txnResult.hash)) as Types.UserTransaction;
+  const txDetails = (await client.getTransactionByHash(txnResult.hash)) as Types.UserTransaction;
   console.log(txDetails);
 }
 
@@ -247,6 +247,25 @@ program
   .argument('<TYPE_Q>')
   .argument('<TYPE_E>')
   .action(book_price_levels_sdk)
+
+
+const simulate_swap_sdk = async (owner: string, B: string, Q: string, E: string, style: string, coins_in: string) => {
+  const {client} = readConfig(program);
+  const repo = getProjectRepo();
+  const owner_ = new HexString(owner);
+  const value = await Econia.Market.OrderBook.load(repo, client, owner_, [parseTypeTagOrThrow(B), parseTypeTagOrThrow(Q), parseTypeTagOrThrow(E)])
+  print(value.simulate_swap_sdk(style=='true', u64(coins_in)));
+}
+
+program
+  .command("simulate-swap-sdk")
+  .argument("<ADDRESS:owner>")
+  .argument('<TYPE_B>')
+  .argument('<TYPE_Q>')
+  .argument('<TYPE_E>')
+  .argument('<style>')
+  .argument('<coins_in>')
+  .action(simulate_swap_sdk)
 
 
 program.parse();

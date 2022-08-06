@@ -8,7 +8,7 @@ import {HexString, AptosClient} from "aptos";
 import * as Aptos_framework from "../aptos_framework";
 import * as Std from "../std";
 export const packageName = "Econia";
-export const moduleAddress = new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7");
+export const moduleAddress = new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd");
 export const moduleName = "coins";
 
 export const BASE_COIN_DECIMALS : U64 = u64("4");
@@ -102,7 +102,7 @@ export function burn_ (
   $p: TypeTag[], /* <CoinType>*/
 ): void {
   let burn_capability;
-  burn_capability = $c.borrow_global<CoinCapabilities>(new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "coins", "CoinCapabilities", [$p[0]]), new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7")).burn_capability;
+  burn_capability = $c.borrow_global<CoinCapabilities>(new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "coins", "CoinCapabilities", [$p[0]]), new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd")).burn_capability;
   Aptos_framework.Coin.burn_(coins, burn_capability, $c, [$p[0]]);
   return;
 }
@@ -116,14 +116,14 @@ export function init_coin_type_ (
   $p: TypeTag[], /* <CoinType>*/
 ): void {
   let burn_capability, mint_capability;
-  if (!((Std.Signer.address_of_(account, $c)).hex() === (new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7")).hex())) {
+  if (!((Std.Signer.address_of_(account, $c)).hex() === (new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd")).hex())) {
     throw $.abortCode(E_NOT_ECONIA);
   }
-  if (!!$c.exists(new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "coins", "CoinCapabilities", [$p[0]]), new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"))) {
+  if (!!$c.exists(new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "coins", "CoinCapabilities", [$p[0]]), new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"))) {
     throw $.abortCode(E_HAS_CAPABILITIES);
   }
   [mint_capability, burn_capability] = Aptos_framework.Coin.initialize_(account, Std.String.utf8_($.copy(coin_name), $c), Std.String.utf8_($.copy(coin_symbol), $c), $.copy(decimals), false, $c, [$p[0]]);
-  $c.move_to(new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "coins", "CoinCapabilities", [$p[0]]), account, new CoinCapabilities({ mint_capability: $.copy(mint_capability), burn_capability: $.copy(burn_capability) }, new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "coins", "CoinCapabilities", [$p[0]])));
+  $c.move_to(new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "coins", "CoinCapabilities", [$p[0]]), account, new CoinCapabilities({ mint_capability: $.copy(mint_capability), burn_capability: $.copy(burn_capability) }, new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "coins", "CoinCapabilities", [$p[0]])));
   return;
 }
 
@@ -131,8 +131,8 @@ export function init_coin_types_ (
   account: HexString,
   $c: AptosDataCache,
 ): void {
-  init_coin_type_(account, BASE_COIN_NAME, BASE_COIN_SYMBOL, BASE_COIN_DECIMALS, $c, [new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "coins", "BC", [])]);
-  init_coin_type_(account, QUOTE_COIN_NAME, QUOTE_COIN_SYMBOL, QUOTE_COIN_DECIMALS, $c, [new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "coins", "QC", [])]);
+  init_coin_type_(account, BASE_COIN_NAME, BASE_COIN_SYMBOL, BASE_COIN_DECIMALS, $c, [new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "coins", "BC", [])]);
+  init_coin_type_(account, QUOTE_COIN_NAME, QUOTE_COIN_SYMBOL, QUOTE_COIN_DECIMALS, $c, [new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "coins", "QC", [])]);
   return;
 }
 
@@ -141,7 +141,7 @@ export function buildPayload_init_coin_types (
 ) {
   const typeParamStrings = [] as string[];
   return $.buildPayload(
-    "0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7::coins::init_coin_types",
+    "0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd::coins::init_coin_types",
     typeParamStrings,
     []
   );
@@ -156,13 +156,13 @@ export function mint_ (
 ): Aptos_framework.Coin.Coin {
   let account_address, mint_capability;
   account_address = Std.Signer.address_of_(account, $c);
-  if (!(($.copy(account_address)).hex() === (new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7")).hex())) {
+  if (!(($.copy(account_address)).hex() === (new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd")).hex())) {
     throw $.abortCode(E_NOT_ECONIA);
   }
-  if (!$c.exists(new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "coins", "CoinCapabilities", [$p[0]]), $.copy(account_address))) {
+  if (!$c.exists(new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "coins", "CoinCapabilities", [$p[0]]), $.copy(account_address))) {
     throw $.abortCode(E_NO_CAPABILITIES);
   }
-  mint_capability = $c.borrow_global<CoinCapabilities>(new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "coins", "CoinCapabilities", [$p[0]]), $.copy(account_address)).mint_capability;
+  mint_capability = $c.borrow_global<CoinCapabilities>(new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "coins", "CoinCapabilities", [$p[0]]), $.copy(account_address)).mint_capability;
   return Aptos_framework.Coin.mint_($.copy(amount), mint_capability, $c, [$p[0]]);
 }
 
@@ -173,7 +173,7 @@ export function buildPayload_mint (
 ) {
   const typeParamStrings = $p.map(t=>$.getTypeTagFullname(t));
   return $.buildPayload(
-    "0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7::coins::mint",
+    "0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd::coins::mint",
     typeParamStrings,
     [
       $.payloadArg(amount),
@@ -183,8 +183,8 @@ export function buildPayload_mint (
 }
 
 export function loadParsers(repo: AptosParserRepo) {
-  repo.addParser("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7::coins::BC", BC.BCParser);
-  repo.addParser("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7::coins::CoinCapabilities", CoinCapabilities.CoinCapabilitiesParser);
-  repo.addParser("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7::coins::QC", QC.QCParser);
+  repo.addParser("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd::coins::BC", BC.BCParser);
+  repo.addParser("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd::coins::CoinCapabilities", CoinCapabilities.CoinCapabilitiesParser);
+  repo.addParser("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd::coins::QC", QC.QCParser);
 }
 

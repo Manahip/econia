@@ -9,7 +9,7 @@ import * as Std from "../std";
 import * as Market from "./market";
 import * as Registry from "./registry";
 export const packageName = "Econia";
-export const moduleAddress = new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7");
+export const moduleAddress = new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd");
 export const moduleName = "init";
 
 export const E_NOT_ECONIA : U64 = u64("0");
@@ -18,7 +18,7 @@ export function init_econia_ (
   account: HexString,
   $c: AptosDataCache,
 ): void {
-  if (!((Std.Signer.address_of_(account, $c)).hex() === (new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7")).hex())) {
+  if (!((Std.Signer.address_of_(account, $c)).hex() === (new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd")).hex())) {
     throw $.abortCode(E_NOT_ECONIA);
   }
   Registry.init_registry_(account, $c);
@@ -31,7 +31,7 @@ export function buildPayload_init_econia (
 ) {
   const typeParamStrings = [] as string[];
   return $.buildPayload(
-    "0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7::init::init_econia",
+    "0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd::init::init_econia",
     typeParamStrings,
     []
   );

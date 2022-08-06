@@ -13,7 +13,7 @@ import * as Order_id from "./order_id";
 import * as Registry from "./registry";
 import * as User from "./user";
 export const packageName = "Econia";
-export const moduleAddress = new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7");
+export const moduleAddress = new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd");
 export const moduleName = "market";
 
 export const ASK : boolean = true;
@@ -46,7 +46,7 @@ export class EconiaCapabilityStore
 
   ];
   static fields: FieldDeclType[] = [
-  { name: "econia_capability", typeTag: new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "capability", "EconiaCapability", []) }];
+  { name: "econia_capability", typeTag: new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "capability", "EconiaCapability", []) }];
 
   econia_capability: Capability.EconiaCapability;
 
@@ -107,8 +107,8 @@ export class OrderBook
   ];
   static fields: FieldDeclType[] = [
   { name: "scale_factor", typeTag: AtomicTypeTag.U64 },
-  { name: "asks", typeTag: new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "critbit", "CritBitTree", [new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "Order", [])]) },
-  { name: "bids", typeTag: new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "critbit", "CritBitTree", [new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "Order", [])]) },
+  { name: "asks", typeTag: new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "critbit", "CritBitTree", [new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "Order", [])]) },
+  { name: "bids", typeTag: new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "critbit", "CritBitTree", [new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "Order", [])]) },
   { name: "min_ask", typeTag: AtomicTypeTag.U128 },
   { name: "max_bid", typeTag: AtomicTypeTag.U128 },
   { name: "counter", typeTag: AtomicTypeTag.U64 }];
@@ -139,16 +139,27 @@ export class OrderBook
     return result as unknown as OrderBook;
   }
 
-  book_orders_sdk() {
+  book_orders_sdk(
+  ) {
     const cache = new DummyCache();
     const tags = (this.typeTag as StructTag).typeParams;
     return book_orders_sdk_(this, cache, tags);
   }
 
-  book_price_levels_sdk() {
+  book_price_levels_sdk(
+  ) {
     const cache = new DummyCache();
     const tags = (this.typeTag as StructTag).typeParams;
     return book_price_levels_sdk_(this, cache, tags);
+  }
+
+  simulate_swap_sdk(
+    style: boolean,
+    coins_in: U64,
+  ) {
+    const cache = new DummyCache();
+    const tags = (this.typeTag as StructTag).typeParams;
+    return simulate_swap_sdk_(this, style, coins_in, cache, tags);
   }
 
 }
@@ -232,10 +243,10 @@ export function cancel_limit_order_ (
   $p: TypeTag[], /* <B, Q, E>*/
 ): void {
   let temp$1, temp$10, temp$11, temp$12, temp$2, temp$3, temp$4, temp$5, temp$6, temp$7, temp$8, temp$9, order_book_ref_mut, tree_ref_mut;
-  if (!$c.exists(new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "OrderBook", [$p[0], $p[1], $p[2]]), $.copy(host))) {
+  if (!$c.exists(new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "OrderBook", [$p[0], $p[1], $p[2]]), $.copy(host))) {
     throw $.abortCode(E_NO_ORDER_BOOK);
   }
-  order_book_ref_mut = $c.borrow_global_mut<OrderBook>(new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "OrderBook", [$p[0], $p[1], $p[2]]), $.copy(host));
+  order_book_ref_mut = $c.borrow_global_mut<OrderBook>(new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "OrderBook", [$p[0], $p[1], $p[2]]), $.copy(host));
   if ((side == ASK)) {
     temp$1 = order_book_ref_mut.asks;
   }
@@ -244,10 +255,10 @@ export function cancel_limit_order_ (
   }
   tree_ref_mut = temp$1;
   [temp$2, temp$3] = [tree_ref_mut, $.copy(order_id)];
-  if (!Critbit.has_key_(temp$2, temp$3, $c, [new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "Order", [])])) {
+  if (!Critbit.has_key_(temp$2, temp$3, $c, [new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "Order", [])])) {
     throw $.abortCode(E_NO_SUCH_ORDER);
   }
-  let { user: order_user, custodian_id: order_custodian_id } = Critbit.pop_(tree_ref_mut, $.copy(order_id), $c, [new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "Order", [])]);
+  let { user: order_user, custodian_id: order_custodian_id } = Critbit.pop_(tree_ref_mut, $.copy(order_id), $c, [new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "Order", [])]);
   if (!(($.copy(user)).hex() === ($.copy(order_user)).hex())) {
     throw $.abortCode(E_INVALID_USER);
   }
@@ -261,11 +272,11 @@ export function cancel_limit_order_ (
     temp$4 = false;
   }
   if (temp$4) {
-    if (Critbit.is_empty_(tree_ref_mut, $c, [new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "Order", [])])) {
+    if (Critbit.is_empty_(tree_ref_mut, $c, [new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "Order", [])])) {
       temp$5 = MIN_ASK_DEFAULT;
     }
     else{
-      temp$5 = Critbit.min_key_(tree_ref_mut, $c, [new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "Order", [])]);
+      temp$5 = Critbit.min_key_(tree_ref_mut, $c, [new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "Order", [])]);
     }
     order_book_ref_mut.min_ask = temp$5;
   }
@@ -277,11 +288,11 @@ export function cancel_limit_order_ (
       temp$6 = false;
     }
     if (temp$6) {
-      if (Critbit.is_empty_(tree_ref_mut, $c, [new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "Order", [])])) {
+      if (Critbit.is_empty_(tree_ref_mut, $c, [new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "Order", [])])) {
         temp$7 = MAX_BID_DEFAULT;
       }
       else{
-        temp$7 = Critbit.max_key_(tree_ref_mut, $c, [new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "Order", [])]);
+        temp$7 = Critbit.max_key_(tree_ref_mut, $c, [new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "Order", [])]);
       }
       order_book_ref_mut.max_bid = temp$7;
     }
@@ -333,7 +344,7 @@ export function buildPayload_cancel_limit_order_user (
 ) {
   const typeParamStrings = $p.map(t=>$.getTypeTagFullname(t));
   return $.buildPayload(
-    "0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7::market::cancel_limit_order_user",
+    "0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd::market::cancel_limit_order_user",
     typeParamStrings,
     [
       $.payloadArg(host),
@@ -395,7 +406,7 @@ export function fill_market_order_break_cleanup_ (
   null_order;
   $.set(spread_maker_ref_mut, $.copy(new_spread_maker));
   if (should_pop) {
-    Critbit.pop_(tree_ref_mut, $.copy(target_order_id), $c, [new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "Order", [])]);
+    Critbit.pop_(tree_ref_mut, $.copy(target_order_id), $c, [new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "Order", [])]);
   }
   else{
   }
@@ -457,10 +468,10 @@ export function fill_market_order_from_market_account_ (
   $p: TypeTag[], /* <B, Q, E>*/
 ): void {
   let temp$1, temp$2, base_coins, econia_capability, market_account_info, order_book_ref_mut, quote_coins, scale_factor;
-  if (!$c.exists(new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "OrderBook", [$p[0], $p[1], $p[2]]), $.copy(host))) {
+  if (!$c.exists(new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "OrderBook", [$p[0], $p[1], $p[2]]), $.copy(host))) {
     throw $.abortCode(E_NO_ORDER_BOOK);
   }
-  order_book_ref_mut = $c.borrow_global_mut<OrderBook>(new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "OrderBook", [$p[0], $p[1], $p[2]]), $.copy(host));
+  order_book_ref_mut = $c.borrow_global_mut<OrderBook>(new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "OrderBook", [$p[0], $p[1], $p[2]]), $.copy(host));
   scale_factor = $.copy(order_book_ref_mut.scale_factor);
   market_account_info = User.market_account_info_($.copy(custodian_id), $c, [$p[0], $p[1], $p[2]]);
   econia_capability = get_econia_capability_($c);
@@ -493,7 +504,7 @@ export function fill_market_order_init_ (
     [temp$1, temp$2, temp$3, temp$4] = [BID, order_book_ref_mut.bids, order_book_ref_mut.max_bid, LEFT];
   }
   [side, tree_ref_mut, spread_maker_ref_mut, traversal_direction] = [temp$1, temp$2, temp$3, temp$4];
-  n_orders = Critbit.length_(tree_ref_mut, $c, [new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "Order", [])]);
+  n_orders = Critbit.length_(tree_ref_mut, $c, [new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "Order", [])]);
   return [$.copy(base_parcels_to_fill), side, tree_ref_mut, spread_maker_ref_mut, $.copy(n_orders), traversal_direction];
 }
 
@@ -528,7 +539,7 @@ export function fill_market_order_loop_order_follow_up_ (
   }
   else{
     if (complete_fill) {
-      [target_order_id, target_order_ref_mut, target_parent_index, target_child_index, {  }] = Critbit.traverse_pop_mut_(tree_ref_mut, $.copy(target_order_id), $.copy(target_parent_index), $.copy(target_child_index), $.copy(n_orders), traversal_direction, $c, [new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "Order", [])]);
+      [target_order_id, target_order_ref_mut, target_parent_index, target_child_index, {  }] = Critbit.traverse_pop_mut_(tree_ref_mut, $.copy(target_order_id), $.copy(target_parent_index), $.copy(target_child_index), $.copy(n_orders), traversal_direction, $c, [new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "Order", [])]);
       if (($.copy(base_parcels_to_fill)).eq((u64("0")))) {
         new_spread_maker = $.copy(target_order_id);
       }
@@ -601,11 +612,11 @@ export function fill_market_order_traverse_loop_ (
   $p: TypeTag[], /* <B, Q, E>*/
 ): void {
   let temp$1, temp$2, temp$3, complete_fill, new_spread_maker, null_order, should_break, should_pop, target_child_index, target_order_id, target_order_ref_mut, target_parent_index;
-  [target_order_id, target_order_ref_mut, target_parent_index, target_child_index] = Critbit.traverse_init_mut_(tree_ref_mut, traversal_direction, $c, [new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "Order", [])]);
+  [target_order_id, target_order_ref_mut, target_parent_index, target_child_index] = Critbit.traverse_init_mut_(tree_ref_mut, traversal_direction, $c, [new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "Order", [])]);
   temp$1 = new HexString("0x0");
   temp$2 = u64("0");
   temp$3 = u64("0");
-  null_order = new Order({ base_parcels: temp$3, user: temp$1, custodian_id: temp$2 }, new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "Order", []));
+  null_order = new Order({ base_parcels: temp$3, user: temp$1, custodian_id: temp$2 }, new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "Order", []));
   while (true) {
     complete_fill = fill_market_order_process_loop_order_(style, side, $.copy(scale_factor), base_parcels_to_fill, $.copy(target_order_id), target_order_ref_mut, base_coins_ref_mut, quote_coins_ref_mut, econia_capability_ref, $c, [$p[0], $p[1], $p[2]]);
     [should_break, should_pop, new_spread_maker, n_orders, target_order_id, target_order_ref_mut, target_parent_index, target_child_index] = fill_market_order_loop_order_follow_up_(side, $.copy(base_parcels_to_fill), complete_fill, traversal_direction, tree_ref_mut, $.copy(n_orders), $.copy(target_order_id), null_order, $.copy(target_parent_index), $.copy(target_child_index), $c);
@@ -642,7 +653,7 @@ export function buildPayload_fill_market_order_user (
 ) {
   const typeParamStrings = $p.map(t=>$.getTypeTagFullname(t));
   return $.buildPayload(
-    "0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7::market::fill_market_order_user",
+    "0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd::market::fill_market_order_user",
     typeParamStrings,
     [
       $.payloadArg(host),
@@ -657,10 +668,10 @@ export function buildPayload_fill_market_order_user (
 export function get_econia_capability_ (
   $c: AptosDataCache,
 ): Capability.EconiaCapability {
-  if (!$c.exists(new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "EconiaCapabilityStore", []), new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"))) {
+  if (!$c.exists(new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "EconiaCapabilityStore", []), new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"))) {
     throw $.abortCode(E_NO_ECONIA_CAPABILITY_STORE);
   }
-  return $.copy($c.borrow_global<EconiaCapabilityStore>(new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "EconiaCapabilityStore", []), new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7")).econia_capability);
+  return $.copy($c.borrow_global<EconiaCapabilityStore>(new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "EconiaCapabilityStore", []), new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd")).econia_capability);
 }
 
 export function get_orders_sdk_ (
@@ -670,7 +681,7 @@ export function get_orders_sdk_ (
   $p: TypeTag[], /* <B, Q, E>*/
 ): SimpleOrder[] {
   let temp$1, temp$2, remaining_traversals, simple_orders, target_id, target_order_ref_mut, target_parent_index, traversal_direction, tree_ref_mut;
-  simple_orders = Std.Vector.empty_($c, [new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "SimpleOrder", [])]);
+  simple_orders = Std.Vector.empty_($c, [new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "SimpleOrder", [])]);
   if ((side == ASK)) {
     [temp$1, temp$2] = [order_book_ref_mut.asks, RIGHT];
   }
@@ -678,21 +689,21 @@ export function get_orders_sdk_ (
     [temp$1, temp$2] = [order_book_ref_mut.bids, LEFT];
   }
   [tree_ref_mut, traversal_direction] = [temp$1, temp$2];
-  if (Critbit.is_empty_(tree_ref_mut, $c, [new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "Order", [])])) {
+  if (Critbit.is_empty_(tree_ref_mut, $c, [new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "Order", [])])) {
     return $.copy(simple_orders);
   }
   else{
   }
-  remaining_traversals = (Critbit.length_(tree_ref_mut, $c, [new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "Order", [])])).sub(u64("1"));
-  [target_id, target_order_ref_mut, target_parent_index, ] = Critbit.traverse_init_mut_(tree_ref_mut, traversal_direction, $c, [new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "Order", [])]);
+  remaining_traversals = (Critbit.length_(tree_ref_mut, $c, [new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "Order", [])])).sub(u64("1"));
+  [target_id, target_order_ref_mut, target_parent_index, ] = Critbit.traverse_init_mut_(tree_ref_mut, traversal_direction, $c, [new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "Order", [])]);
   while (true) {
-    Std.Vector.push_back_(simple_orders, new SimpleOrder({ price: Order_id.price_($.copy(target_id), $c), base_parcels: $.copy(target_order_ref_mut.base_parcels) }, new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "SimpleOrder", [])), $c, [new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "SimpleOrder", [])]);
+    Std.Vector.push_back_(simple_orders, new SimpleOrder({ price: Order_id.price_($.copy(target_id), $c), base_parcels: $.copy(target_order_ref_mut.base_parcels) }, new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "SimpleOrder", [])), $c, [new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "SimpleOrder", [])]);
     if (($.copy(remaining_traversals)).eq((u64("0")))) {
       return $.copy(simple_orders);
     }
     else{
     }
-    [target_id, target_order_ref_mut, target_parent_index, ] = Critbit.traverse_mut_(tree_ref_mut, $.copy(target_id), $.copy(target_parent_index), traversal_direction, $c, [new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "Order", [])]);
+    [target_id, target_order_ref_mut, target_parent_index, ] = Critbit.traverse_mut_(tree_ref_mut, $.copy(target_id), $.copy(target_parent_index), traversal_direction, $c, [new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "Order", [])]);
     remaining_traversals = ($.copy(remaining_traversals)).sub(u64("1"));
   }
 }
@@ -702,22 +713,22 @@ export function get_price_levels_sdk_ (
   $c: AptosDataCache,
 ): PriceLevel[] {
   let level_base_parcels, level_price, n_simple_orders, price_levels, simple_order_index, simple_order_ref;
-  price_levels = Std.Vector.empty_($c, [new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "PriceLevel", [])]);
-  if (Std.Vector.is_empty_(simple_orders, $c, [new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "SimpleOrder", [])])) {
+  price_levels = Std.Vector.empty_($c, [new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "PriceLevel", [])]);
+  if (Std.Vector.is_empty_(simple_orders, $c, [new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "SimpleOrder", [])])) {
     return $.copy(price_levels);
   }
   else{
   }
-  simple_order_ref = Std.Vector.borrow_(simple_orders, u64("0"), $c, [new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "SimpleOrder", [])]);
+  simple_order_ref = Std.Vector.borrow_(simple_orders, u64("0"), $c, [new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "SimpleOrder", [])]);
   level_price = $.copy(simple_order_ref.price);
   level_base_parcels = $.copy(simple_order_ref.base_parcels);
-  n_simple_orders = Std.Vector.length_(simple_orders, $c, [new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "SimpleOrder", [])]);
+  n_simple_orders = Std.Vector.length_(simple_orders, $c, [new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "SimpleOrder", [])]);
   simple_order_index = u64("1");
   while (($.copy(simple_order_index)).lt($.copy(n_simple_orders))) {
     {
-      simple_order_ref = Std.Vector.borrow_(simple_orders, $.copy(simple_order_index), $c, [new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "SimpleOrder", [])]);
+      simple_order_ref = Std.Vector.borrow_(simple_orders, $.copy(simple_order_index), $c, [new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "SimpleOrder", [])]);
       if (($.copy(simple_order_ref.price)).neq($.copy(level_price))) {
-        Std.Vector.push_back_(price_levels, new PriceLevel({ price: $.copy(level_price), base_parcels: $.copy(level_base_parcels) }, new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "PriceLevel", [])), $c, [new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "PriceLevel", [])]);
+        Std.Vector.push_back_(price_levels, new PriceLevel({ price: $.copy(level_price), base_parcels: $.copy(level_base_parcels) }, new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "PriceLevel", [])), $c, [new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "PriceLevel", [])]);
         [level_price, level_base_parcels] = [$.copy(simple_order_ref.price), $.copy(simple_order_ref.base_parcels)];
       }
       else{
@@ -726,7 +737,7 @@ export function get_price_levels_sdk_ (
       simple_order_index = ($.copy(simple_order_index)).add(u64("1"));
     }
 
-  }Std.Vector.push_back_(price_levels, new PriceLevel({ price: $.copy(level_price), base_parcels: $.copy(level_base_parcels) }, new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "PriceLevel", [])), $c, [new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "PriceLevel", [])]);
+  }Std.Vector.push_back_(price_levels, new PriceLevel({ price: $.copy(level_price), base_parcels: $.copy(level_base_parcels) }, new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "PriceLevel", [])), $c, [new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "PriceLevel", [])]);
   return $.copy(price_levels);
 }
 
@@ -748,10 +759,10 @@ export function init_book_ (
   $c: AptosDataCache,
   $p: TypeTag[], /* <B, Q, E>*/
 ): void {
-  if (!!$c.exists(new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "OrderBook", [$p[0], $p[1], $p[2]]), Std.Signer.address_of_(host, $c))) {
+  if (!!$c.exists(new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "OrderBook", [$p[0], $p[1], $p[2]]), Std.Signer.address_of_(host, $c))) {
     throw $.abortCode(E_BOOK_EXISTS);
   }
-  $c.move_to(new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "OrderBook", [$p[0], $p[1], $p[2]]), host, new OrderBook({ scale_factor: $.copy(scale_factor), asks: Critbit.empty_($c, [new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "Order", [])]), bids: Critbit.empty_($c, [new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "Order", [])]), min_ask: MIN_ASK_DEFAULT, max_bid: MAX_BID_DEFAULT, counter: u64("0") }, new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "OrderBook", [$p[0], $p[1], $p[2]])));
+  $c.move_to(new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "OrderBook", [$p[0], $p[1], $p[2]]), host, new OrderBook({ scale_factor: $.copy(scale_factor), asks: Critbit.empty_($c, [new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "Order", [])]), bids: Critbit.empty_($c, [new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "Order", [])]), min_ask: MIN_ASK_DEFAULT, max_bid: MAX_BID_DEFAULT, counter: u64("0") }, new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "OrderBook", [$p[0], $p[1], $p[2]])));
   return;
 }
 
@@ -760,14 +771,14 @@ export function init_econia_capability_store_ (
   $c: AptosDataCache,
 ): void {
   let econia_capability;
-  if (!((Std.Signer.address_of_(account, $c)).hex() === (new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7")).hex())) {
+  if (!((Std.Signer.address_of_(account, $c)).hex() === (new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd")).hex())) {
     throw $.abortCode(E_NOT_ECONIA);
   }
-  if (!!$c.exists(new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "EconiaCapabilityStore", []), new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"))) {
+  if (!!$c.exists(new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "EconiaCapabilityStore", []), new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"))) {
     throw $.abortCode(E_ECONIA_CAPABILITY_STORE_EXISTS);
   }
   econia_capability = Capability.get_econia_capability_(account, $c);
-  $c.move_to(new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "EconiaCapabilityStore", []), account, new EconiaCapabilityStore({ econia_capability: $.copy(econia_capability) }, new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "EconiaCapabilityStore", [])));
+  $c.move_to(new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "EconiaCapabilityStore", []), account, new EconiaCapabilityStore({ econia_capability: $.copy(econia_capability) }, new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "EconiaCapabilityStore", [])));
   return;
 }
 
@@ -782,10 +793,10 @@ export function place_limit_order_ (
   $p: TypeTag[], /* <B, Q, E>*/
 ): void {
   let temp$1, temp$10, temp$11, temp$2, temp$3, temp$4, temp$5, temp$6, temp$7, temp$8, temp$9, crossed_spread, new_spread_maker, order_book_ref_mut, order_id, spread_maker_ref_mut, tree_ref_mut;
-  if (!$c.exists(new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "OrderBook", [$p[0], $p[1], $p[2]]), $.copy(host))) {
+  if (!$c.exists(new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "OrderBook", [$p[0], $p[1], $p[2]]), $.copy(host))) {
     throw $.abortCode(E_NO_ORDER_BOOK);
   }
-  order_book_ref_mut = $c.borrow_global_mut<OrderBook>(new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "OrderBook", [$p[0], $p[1], $p[2]]), $.copy(host));
+  order_book_ref_mut = $c.borrow_global_mut<OrderBook>(new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "OrderBook", [$p[0], $p[1], $p[2]]), $.copy(host));
   order_id = Order_id.order_id_($.copy(price), get_serial_id_(order_book_ref_mut, $c, [$p[0], $p[1], $p[2]]), side, $c);
   temp$7 = $.copy(user);
   temp$6 = $.copy(custodian_id);
@@ -810,7 +821,7 @@ export function place_limit_order_ (
   }
   else{
   }
-  Critbit.insert_(tree_ref_mut, $.copy(order_id), new Order({ base_parcels: $.copy(base_parcels), user: $.copy(user), custodian_id: $.copy(custodian_id) }, new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "Order", [])), $c, [new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "Order", [])]);
+  Critbit.insert_(tree_ref_mut, $.copy(order_id), new Order({ base_parcels: $.copy(base_parcels), user: $.copy(user), custodian_id: $.copy(custodian_id) }, new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "Order", [])), $c, [new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "Order", [])]);
   return;
 }
 
@@ -853,7 +864,7 @@ export function buildPayload_place_limit_order_user (
 ) {
   const typeParamStrings = $p.map(t=>$.getTypeTagFullname(t));
   return $.buildPayload(
-    "0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7::market::place_limit_order_user",
+    "0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd::market::place_limit_order_user",
     typeParamStrings,
     [
       $.payloadArg(host),
@@ -884,11 +895,80 @@ export function buildPayload_register_market (
 ) {
   const typeParamStrings = $p.map(t=>$.getTypeTagFullname(t));
   return $.buildPayload(
-    "0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7::market::register_market",
+    "0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd::market::register_market",
     typeParamStrings,
     []
   );
 
+}
+
+export function simulate_swap_sdk_ (
+  order_book_ref_mut: OrderBook,
+  style: boolean,
+  coins_in: U64,
+  $c: AptosDataCache,
+  $p: TypeTag[], /* <B, Q, E>*/
+): [U64, U64] {
+  let temp$1, temp$2, temp$3, temp$4, temp$5, temp$6, temp$7, temp$8, base_parcels_can_afford, base_parcels_filled, base_parcels_on_hand, coins_in_left, coins_in_multiplier, coins_out, coins_out_multiplier, n_orders, scale_factor, should_return, side, simple_order, simple_order_index, simple_orders;
+  if ((style == BUY)) {
+    temp$1 = ASK;
+  }
+  else{
+    temp$1 = BID;
+  }
+  side = temp$1;
+  simple_orders = get_orders_sdk_(order_book_ref_mut, side, $c, [$p[0], $p[1], $p[2]]);
+  if (Std.Vector.is_empty_(simple_orders, $c, [new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "SimpleOrder", [])])) {
+    return [u64("0"), $.copy(coins_in)];
+  }
+  else{
+  }
+  scale_factor = $.copy(order_book_ref_mut.scale_factor);
+  [coins_in_left, coins_out, simple_order_index, n_orders] = [$.copy(coins_in), u64("0"), u64("0"), Std.Vector.length_(simple_orders, $c, [new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "SimpleOrder", [])])];
+  while (true) {
+    simple_order = Std.Vector.borrow_(simple_orders, $.copy(simple_order_index), $c, [new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "SimpleOrder", [])]);
+    if ((style == SELL)) {
+      [temp$2, temp$3] = [$.copy(scale_factor), $.copy(simple_order.price)];
+    }
+    else{
+      [temp$2, temp$3] = [$.copy(simple_order.price), $.copy(scale_factor)];
+    }
+    [coins_in_multiplier, coins_out_multiplier] = [temp$2, temp$3];
+    if ((style == SELL)) {
+      base_parcels_on_hand = ($.copy(coins_in_left)).div($.copy(scale_factor));
+      if (($.copy(base_parcels_on_hand)).gt($.copy(simple_order.base_parcels))) {
+        [temp$4, temp$5] = [$.copy(simple_order.base_parcels), false];
+      }
+      else{
+        [temp$4, temp$5] = [$.copy(base_parcels_on_hand), true];
+      }
+      [base_parcels_filled, should_return] = [temp$4, temp$5];
+    }
+    else{
+      base_parcels_can_afford = ($.copy(coins_in_left)).div($.copy(simple_order.price));
+      if (($.copy(simple_order.base_parcels)).gt($.copy(base_parcels_can_afford))) {
+        [temp$6, temp$7] = [$.copy(base_parcels_can_afford), true];
+      }
+      else{
+        [temp$6, temp$7] = [$.copy(simple_order.base_parcels), false];
+      }
+      [base_parcels_filled, should_return] = [temp$6, temp$7];
+    }
+    coins_in_left = ($.copy(coins_in_left)).sub(($.copy(base_parcels_filled)).mul($.copy(coins_in_multiplier)));
+    coins_out = ($.copy(coins_out)).add(($.copy(base_parcels_filled)).mul($.copy(coins_out_multiplier)));
+    simple_order_index = ($.copy(simple_order_index)).add(u64("1"));
+    if (should_return) {
+      temp$8 = true;
+    }
+    else{
+      temp$8 = ($.copy(simple_order_index)).eq(($.copy(n_orders)));
+    }
+    if (temp$8) {
+      return [$.copy(coins_out), $.copy(coins_in_left)];
+    }
+    else{
+    }
+  }
 }
 
 export function swap_ (
@@ -900,10 +980,10 @@ export function swap_ (
   $p: TypeTag[], /* <B, Q, E>*/
 ): void {
   let temp$1, temp$2, econia_capability, max_base_parcels, max_quote_units, order_book_ref_mut, scale_factor;
-  if (!$c.exists(new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "OrderBook", [$p[0], $p[1], $p[2]]), $.copy(host))) {
+  if (!$c.exists(new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "OrderBook", [$p[0], $p[1], $p[2]]), $.copy(host))) {
     throw $.abortCode(E_NO_ORDER_BOOK);
   }
-  order_book_ref_mut = $c.borrow_global_mut<OrderBook>(new StructTag(new HexString("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7"), "market", "OrderBook", [$p[0], $p[1], $p[2]]), $.copy(host));
+  order_book_ref_mut = $c.borrow_global_mut<OrderBook>(new StructTag(new HexString("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd"), "market", "OrderBook", [$p[0], $p[1], $p[2]]), $.copy(host));
   scale_factor = $.copy(order_book_ref_mut.scale_factor);
   econia_capability = get_econia_capability_($c);
   if ((style == BUY)) {
@@ -918,10 +998,10 @@ export function swap_ (
 }
 
 export function loadParsers(repo: AptosParserRepo) {
-  repo.addParser("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7::market::EconiaCapabilityStore", EconiaCapabilityStore.EconiaCapabilityStoreParser);
-  repo.addParser("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7::market::Order", Order.OrderParser);
-  repo.addParser("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7::market::OrderBook", OrderBook.OrderBookParser);
-  repo.addParser("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7::market::PriceLevel", PriceLevel.PriceLevelParser);
-  repo.addParser("0xb1d4c0de8bc24468608637dfdbff975a0888f8935aa63338a44078eec5c7b6c7::market::SimpleOrder", SimpleOrder.SimpleOrderParser);
+  repo.addParser("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd::market::EconiaCapabilityStore", EconiaCapabilityStore.EconiaCapabilityStoreParser);
+  repo.addParser("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd::market::Order", Order.OrderParser);
+  repo.addParser("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd::market::OrderBook", OrderBook.OrderBookParser);
+  repo.addParser("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd::market::PriceLevel", PriceLevel.PriceLevelParser);
+  repo.addParser("0xc0deb00c9154b6b64db01eeb77d08255300315e1fa35b687d384a703f6034fbd::market::SimpleOrder", SimpleOrder.SimpleOrderParser);
 }
 
